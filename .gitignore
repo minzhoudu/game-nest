@@ -10,3 +10,4 @@ build/
 Thumbs.db
 *.tsbuildinfo
 coverage/
+.gamenest-node-id

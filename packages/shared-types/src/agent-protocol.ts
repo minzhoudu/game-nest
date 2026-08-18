@@ -7,7 +7,7 @@
 // one of the types below, so both ends can `switch` on `type` with full
 // type-safety.
 
-import { GameServerConfig, Id, ServerStatus } from './entities';
+import { GameServerConfig, Id, ServerStatus } from './entities.js';
 
 // ---- Agent -> Control Plane -------------------------------------------
 
@@ -30,6 +30,8 @@ export interface HostInfo {
 // ---- Control Plane -> Agent --------------------------------------------
 
 export type ServerToAgentMessage =
+  | { type: 'agent.registered'; nodeId: Id }
+  | { type: 'agent.registrationFailed'; reason: string }
   | {
       type: 'command.createContainer';
       requestId: Id;
@@ -43,3 +45,9 @@ export type ServerToAgentMessage =
   | { type: 'command.streamLogs'; requestId: Id; serverId: Id; follow: boolean };
 
 export type AnyProtocolMessage = AgentToServerMessage | ServerToAgentMessage;
+
+/** Socket.IO event name both sides use to exchange the envelope above. */
+export const PROTOCOL_EVENT = 'message';
+
+/** Namespace the agent connects to on the control plane's WS server. */
+export const AGENT_NAMESPACE = '/agent';

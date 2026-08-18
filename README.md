@@ -42,6 +42,15 @@ pnpm --filter @gamenest/agent dev   # http://localhost:3001 (health check only)
 
 ## Status
 
-Repo scaffold only — apps boot but aren't wired together yet. Next up:
-the agent-to-control-plane WebSocket handshake (register + heartbeat),
-then Docker container orchestration for the first GameTemplate (Minecraft).
+The agent ↔ control-plane WebSocket handshake is working: `agent` generates
+(and persists) a stable node id, dials out to `api`'s `/agent` namespace,
+registers with a shared-secret token, and heartbeats every 15s. `api` tracks
+connected nodes in memory and exposes them at `GET /nodes`. Auth is a single
+shared secret for now (`AGENT_REGISTRATION_SECRET` / `AGENT_TOKEN` in the
+`.env` files) — fine for you + friends, will become per-node issued tokens
+once there's a database.
+
+Not implemented yet: anything Docker. The next step is having the agent
+actually create/start/stop containers when it receives `command.*` messages
+(currently it just logs that it received them), starting with one
+GameTemplate (Minecraft).

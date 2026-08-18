@@ -1,2 +1,2 @@
-export * from './entities';
-export * from './agent-protocol';
+export * from './entities.js';
+export * from './agent-protocol.js';
