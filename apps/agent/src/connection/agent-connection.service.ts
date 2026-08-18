@@ -3,13 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import Docker from 'dockerode';
 import * as os from 'node:os';
 import { io, Socket } from 'socket.io-client';
-import {
-  AGENT_NAMESPACE,
-  AgentToServerMessage,
-  HostInfo,
-  PROTOCOL_EVENT,
-  ServerToAgentMessage,
-} from '@gamenest/shared-types';
+import { AGENT_NAMESPACE, PROTOCOL_EVENT, ServerStatus } from '@gamenest/shared-types';
+import type { AgentToServerMessage, HostInfo, ServerToAgentMessage } from '@gamenest/shared-types';
+import { DockerService } from '../docker/docker.service';
 import { getOrCreateNodeId } from './node-identity';
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
@@ -29,7 +25,10 @@ export class AgentConnectionService implements OnModuleInit, OnModuleDestroy {
   private heartbeatTimer?: ReturnType<typeof setInterval>;
   private nodeId!: string;
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly docker: DockerService,
+  ) {}
 
   async onModuleInit(): Promise<void> {
     this.nodeId = this.config.get<string>('NODE_ID') || getOrCreateNodeId();
@@ -75,16 +74,57 @@ export class AgentConnectionService implements OnModuleInit, OnModuleDestroy {
         this.logger.error(`Registration rejected: ${message.reason}`);
         return;
       case 'command.createContainer':
+        void this.runCommand(message.requestId, async () => {
+          await this.docker.createContainer(message.serverId, message.dockerImage, message.ports, message.config);
+          this.send({ type: 'container.status', serverId: message.serverId, status: ServerStatus.STOPPED });
+        });
+        return;
       case 'command.startContainer':
+        void this.runCommand(message.requestId, async () => {
+          this.send({ type: 'container.status', serverId: message.serverId, status: ServerStatus.STARTING });
+          await this.docker.startContainer(message.serverId);
+          this.send({ type: 'container.status', serverId: message.serverId, status: ServerStatus.RUNNING });
+        });
+        return;
       case 'command.stopContainer':
+        void this.runCommand(message.requestId, async () => {
+          this.send({ type: 'container.status', serverId: message.serverId, status: ServerStatus.STOPPING });
+          await this.docker.stopContainer(message.serverId);
+          this.send({ type: 'container.status', serverId: message.serverId, status: ServerStatus.STOPPED });
+        });
+        return;
       case 'command.deleteContainer':
+        void this.runCommand(message.requestId, async () => {
+          this.send({ type: 'container.status', serverId: message.serverId, status: ServerStatus.DELETING });
+          await this.docker.deleteContainer(message.serverId);
+        });
+        return;
       case 'command.streamLogs':
-        // Docker orchestration is the next phase — for now, just prove
-        // commands make it from the control plane to the agent intact.
-        this.logger.warn(`Received "${message.type}" but Docker orchestration isn't implemented yet.`);
+        void this.runCommand(message.requestId, async () => {
+          await this.docker.streamLogs(message.serverId, (line) => {
+            this.send({
+              type: 'container.log',
+              serverId: message.serverId,
+              line,
+              timestamp: new Date().toISOString(),
+            });
+          });
+        });
         return;
       default:
         this.logger.warn(`Unhandled control-plane message: ${(message as { type: string }).type}`);
+    }
+  }
+
+  /** Runs a Docker action, translating success/failure into command.ack / command.error. */
+  private async runCommand(requestId: string, action: () => Promise<void>): Promise<void> {
+    try {
+      await action();
+      this.send({ type: 'command.ack', requestId });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Command ${requestId} failed: ${message}`);
+      this.send({ type: 'command.error', requestId, message });
     }
   }
 

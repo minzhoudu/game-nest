@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   ConnectedSocket,
   MessageBody,
@@ -10,6 +11,12 @@ import {
 import { Socket } from 'socket.io';
 import { AGENT_NAMESPACE, PROTOCOL_EVENT } from '@gamenest/shared-types';
 import type { AgentToServerMessage, ServerToAgentMessage } from '@gamenest/shared-types';
+import {
+  AGENT_COMMAND_ACK,
+  AGENT_COMMAND_ERROR,
+  AGENT_CONTAINER_LOG,
+  AGENT_CONTAINER_STATUS,
+} from './agent-events';
 import { NodeRegistryService } from './node-registry.service';
 
 /**
@@ -24,6 +31,7 @@ export class NodesGateway implements OnGatewayDisconnect {
   constructor(
     private readonly registry: NodeRegistryService,
     private readonly config: ConfigService,
+    private readonly events: EventEmitter2,
   ) {}
 
   @SubscribeMessage(PROTOCOL_EVENT)
@@ -36,17 +44,20 @@ export class NodesGateway implements OnGatewayDisconnect {
         this.registry.touchHeartbeat(message.nodeId);
         return;
       case 'container.status':
-        // TODO(next phase): persist + relay to the dashboard once servers exist.
-        this.logger.log(`server ${message.serverId} -> ${message.status}`);
+        this.events.emit(AGENT_CONTAINER_STATUS, { serverId: message.serverId, status: message.status });
         return;
       case 'container.log':
-        // TODO(next phase): relay to a per-server log stream for the dashboard.
+        this.events.emit(AGENT_CONTAINER_LOG, {
+          serverId: message.serverId,
+          line: message.line,
+          timestamp: message.timestamp,
+        });
         return;
       case 'command.ack':
-        this.logger.debug(`command ${message.requestId} acked`);
+        this.events.emit(AGENT_COMMAND_ACK, { requestId: message.requestId });
         return;
       case 'command.error':
-        this.logger.warn(`command ${message.requestId} failed: ${message.message}`);
+        this.events.emit(AGENT_COMMAND_ERROR, { requestId: message.requestId, message: message.message });
         return;
       default:
         this.logger.warn(`Unhandled agent message type: ${(message as { type: string }).type}`);
