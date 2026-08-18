@@ -9,7 +9,10 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:studio": "pnpm --filter @gamenest/api prisma:studio"
   },
   "devDependencies": {
     "turbo": "^2.3.0",

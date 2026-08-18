@@ -1,0 +1,91 @@
+// GameNest control-plane schema.
+// Mirrors the shapes in packages/shared-types/src/entities.ts — keep the two
+// in sync when either changes (the Prisma models are the source of truth for
+// storage; shared-types is what the wire/UI layers actually use).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum NodeKind {
+  local
+  cloud
+}
+
+enum ServerStatus {
+  creating
+  stopped
+  starting
+  running
+  stopping
+  error
+  deleting
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+
+  nodes   GameNode[]
+  servers GameServer[]
+
+  @@map("users")
+}
+
+/// A host capable of running game server containers — a PC or a cloud VM.
+/// Named GameNode (not Node) to avoid colliding with Node.js's own types.
+model GameNode {
+  id        String    @id @default(uuid())
+  ownerId   String
+  owner     User      @relation(fields: [ownerId], references: [id])
+  name      String
+  kind      NodeKind
+  lastSeenAt DateTime?
+  createdAt DateTime  @default(now())
+
+  servers GameServer[]
+
+  @@map("nodes")
+}
+
+/// A supported game, defined as a Docker image + its configuration surface.
+model GameTemplate {
+  id           String   @id @default(uuid())
+  slug         String   @unique
+  name         String
+  dockerImage  String
+  /// PortMapping[]
+  ports        Json
+  /// EnvVarSchema[]
+  envSchema    Json
+  /// { containerPath: string; label: string }[]
+  volumeMounts Json?
+  createdAt    DateTime @default(now())
+
+  servers GameServer[]
+
+  @@map("game_templates")
+}
+
+model GameServer {
+  id         String       @id @default(uuid())
+  ownerId    String
+  owner      User         @relation(fields: [ownerId], references: [id])
+  nodeId     String
+  node       GameNode     @relation(fields: [nodeId], references: [id])
+  templateId String
+  template   GameTemplate @relation(fields: [templateId], references: [id])
+  name       String
+  status     ServerStatus @default(creating)
+  /// GameServerConfig — { env: Record<string, string> }
+  config     Json
+  createdAt  DateTime     @default(now())
+
+  @@map("game_servers")
+}
