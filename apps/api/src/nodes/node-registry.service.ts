@@ -25,7 +25,13 @@ export class NodeRegistryService {
 
   register(nodeId: Id, socket: Socket, hostInfo: HostInfo): void {
     const now = new Date().toISOString();
-    this.nodes.set(nodeId, { nodeId, socket, hostInfo, connectedAt: now, lastSeenAt: now });
+    this.nodes.set(nodeId, {
+      nodeId,
+      socket,
+      hostInfo,
+      connectedAt: now,
+      lastSeenAt: now,
+    });
   }
 
   touchHeartbeat(nodeId: Id): void {
@@ -53,6 +59,11 @@ export class NodeRegistryService {
   }
 
   list(): Array<Omit<ConnectedNode, 'socket'>> {
-    return [...this.nodes.values()].map(({ socket: _socket, ...rest }) => rest);
+    return [...this.nodes.values()].map((node) => ({
+      nodeId: node.nodeId,
+      hostInfo: node.hostInfo,
+      connectedAt: node.connectedAt,
+      lastSeenAt: node.lastSeenAt,
+    }));
   }
 }

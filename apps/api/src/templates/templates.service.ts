@@ -14,10 +14,26 @@ const TEMPLATES: GameTemplate[] = [
     dockerImage: 'itzg/minecraft-server:latest',
     ports: [{ containerPort: 25565, protocol: 'tcp', label: 'Game port' }],
     envSchema: [
-      { key: 'EULA', label: 'Accept the Mojang EULA', type: 'boolean', default: true, required: true },
-      { key: 'VERSION', label: 'Minecraft version', type: 'string', default: 'LATEST' },
+      {
+        key: 'EULA',
+        label: 'Accept the Mojang EULA',
+        type: 'boolean',
+        default: true,
+        required: true,
+      },
+      {
+        key: 'VERSION',
+        label: 'Minecraft version',
+        type: 'string',
+        default: 'LATEST',
+      },
       { key: 'MEMORY', label: 'Memory limit', type: 'string', default: '2G' },
-      { key: 'DIFFICULTY', label: 'Difficulty', type: 'string', default: 'normal' },
+      {
+        key: 'DIFFICULTY',
+        label: 'Difficulty',
+        type: 'string',
+        default: 'normal',
+      },
     ],
   },
 ];

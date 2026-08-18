@@ -4,7 +4,10 @@ import { randomUUID } from 'node:crypto';
 import { PROTOCOL_EVENT } from '@gamenest/shared-types';
 import type { Id, ServerToAgentMessage } from '@gamenest/shared-types';
 import { AGENT_COMMAND_ACK, AGENT_COMMAND_ERROR } from './agent-events';
-import type { AgentCommandAckEvent, AgentCommandErrorEvent } from './agent-events';
+import type {
+  AgentCommandAckEvent,
+  AgentCommandErrorEvent,
+} from './agent-events';
 import { NodeRegistryService } from './node-registry.service';
 
 const COMMAND_TIMEOUT_MS = 30_000;
@@ -18,9 +21,14 @@ interface PendingCommand {
 // union down to only its *common* keys, which would let callers pass a
 // command.createContainer without dockerImage/ports/config and still
 // type-check. This distributes Omit over each member first.
-type DistributiveOmit<T, K extends keyof T> = T extends unknown ? Omit<T, K> : never;
+type DistributiveOmit<T, K extends keyof T> = T extends unknown
+  ? Omit<T, K>
+  : never;
 
-type Command = DistributiveOmit<Extract<ServerToAgentMessage, { requestId: Id }>, 'requestId'>;
+type Command = DistributiveOmit<
+  Extract<ServerToAgentMessage, { requestId: Id }>,
+  'requestId'
+>;
 
 /**
  * Turns the fire-and-forget agent socket into request/response: send() sends
@@ -48,7 +56,11 @@ export class NodeCommandService {
     return new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pending.delete(requestId);
-        reject(new Error(`Command ${message.type} timed out waiting for node ${nodeId}`));
+        reject(
+          new Error(
+            `Command ${message.type} timed out waiting for node ${nodeId}`,
+          ),
+        );
       }, COMMAND_TIMEOUT_MS);
 
       this.pending.set(requestId, {
@@ -78,7 +90,9 @@ export class NodeCommandService {
   private handleError(event: AgentCommandErrorEvent): void {
     const pending = this.pending.get(event.requestId);
     if (!pending) {
-      this.logger.warn(`command.error for unknown/expired request ${event.requestId}: ${event.message}`);
+      this.logger.warn(
+        `command.error for unknown/expired request ${event.requestId}: ${event.message}`,
+      );
       return;
     }
     this.pending.delete(event.requestId);

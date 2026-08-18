@@ -10,7 +10,10 @@ import {
 } from '@nestjs/websockets';
 import { Socket } from 'socket.io';
 import { AGENT_NAMESPACE, PROTOCOL_EVENT } from '@gamenest/shared-types';
-import type { AgentToServerMessage, ServerToAgentMessage } from '@gamenest/shared-types';
+import type {
+  AgentToServerMessage,
+  ServerToAgentMessage,
+} from '@gamenest/shared-types';
 import {
   AGENT_COMMAND_ACK,
   AGENT_COMMAND_ERROR,
@@ -35,7 +38,10 @@ export class NodesGateway implements OnGatewayDisconnect {
   ) {}
 
   @SubscribeMessage(PROTOCOL_EVENT)
-  handleMessage(@ConnectedSocket() client: Socket, @MessageBody() message: AgentToServerMessage): void {
+  handleMessage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() message: AgentToServerMessage,
+  ): void {
     switch (message.type) {
       case 'agent.register':
         this.handleRegister(client, message);
@@ -44,7 +50,10 @@ export class NodesGateway implements OnGatewayDisconnect {
         this.registry.touchHeartbeat(message.nodeId);
         return;
       case 'container.status':
-        this.events.emit(AGENT_CONTAINER_STATUS, { serverId: message.serverId, status: message.status });
+        this.events.emit(AGENT_CONTAINER_STATUS, {
+          serverId: message.serverId,
+          status: message.status,
+        });
         return;
       case 'container.log':
         this.events.emit(AGENT_CONTAINER_LOG, {
@@ -57,10 +66,15 @@ export class NodesGateway implements OnGatewayDisconnect {
         this.events.emit(AGENT_COMMAND_ACK, { requestId: message.requestId });
         return;
       case 'command.error':
-        this.events.emit(AGENT_COMMAND_ERROR, { requestId: message.requestId, message: message.message });
+        this.events.emit(AGENT_COMMAND_ERROR, {
+          requestId: message.requestId,
+          message: message.message,
+        });
         return;
       default:
-        this.logger.warn(`Unhandled agent message type: ${(message as { type: string }).type}`);
+        this.logger.warn(
+          `Unhandled agent message type: ${(message as { type: string }).type}`,
+        );
     }
   }
 
@@ -82,7 +96,10 @@ export class NodesGateway implements OnGatewayDisconnect {
     // and a "register a node" flow in the dashboard (Phase 2/3).
     if (!expectedSecret || message.agentToken !== expectedSecret) {
       this.logger.warn(`Rejected node ${message.nodeId}: invalid agent token`);
-      this.send(client, { type: 'agent.registrationFailed', reason: 'Invalid agent token' });
+      this.send(client, {
+        type: 'agent.registrationFailed',
+        reason: 'Invalid agent token',
+      });
       client.disconnect(true);
       return;
     }

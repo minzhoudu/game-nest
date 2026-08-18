@@ -6,7 +6,11 @@ import { ConnectionModule } from './connection/connection.module';
 import { DockerModule } from './docker/docker.module';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), DockerModule, ConnectionModule],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    DockerModule,
+    ConnectionModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

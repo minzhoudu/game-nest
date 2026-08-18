@@ -1,10 +1,23 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Docker from 'dockerode';
 import * as os from 'node:os';
 import { io, Socket } from 'socket.io-client';
-import { AGENT_NAMESPACE, PROTOCOL_EVENT, ServerStatus } from '@gamenest/shared-types';
-import type { AgentToServerMessage, HostInfo, ServerToAgentMessage } from '@gamenest/shared-types';
+import {
+  AGENT_NAMESPACE,
+  PROTOCOL_EVENT,
+  ServerStatus,
+} from '@gamenest/shared-types';
+import type {
+  AgentToServerMessage,
+  HostInfo,
+  ServerToAgentMessage,
+} from '@gamenest/shared-types';
 import { DockerService } from '../docker/docker.service';
 import { getOrCreateNodeId } from './node-identity';
 
@@ -30,17 +43,21 @@ export class AgentConnectionService implements OnModuleInit, OnModuleDestroy {
     private readonly docker: DockerService,
   ) {}
 
-  async onModuleInit(): Promise<void> {
+  onModuleInit(): void {
     this.nodeId = this.config.get<string>('NODE_ID') || getOrCreateNodeId();
     const apiUrl = this.config.get<string>('API_URL', 'http://localhost:3000');
     const agentToken = this.config.get<string>('AGENT_TOKEN', '');
 
     if (!agentToken) {
-      this.logger.warn('AGENT_TOKEN is not set — the control plane will reject registration.');
+      this.logger.warn(
+        'AGENT_TOKEN is not set — the control plane will reject registration.',
+      );
     }
 
     this.logger.log(`Node id: ${this.nodeId}`);
-    this.logger.log(`Connecting to control plane at ${apiUrl}${AGENT_NAMESPACE} ...`);
+    this.logger.log(
+      `Connecting to control plane at ${apiUrl}${AGENT_NAMESPACE} ...`,
+    );
 
     this.socket = io(`${apiUrl}${AGENT_NAMESPACE}`, {
       reconnection: true,
@@ -48,9 +65,15 @@ export class AgentConnectionService implements OnModuleInit, OnModuleDestroy {
     });
 
     this.socket.on('connect', () => void this.handleConnect(agentToken));
-    this.socket.on('disconnect', (reason) => this.logger.warn(`Disconnected from control plane: ${reason}`));
-    this.socket.on('connect_error', (err) => this.logger.error(`Connection error: ${err.message}`));
-    this.socket.on(PROTOCOL_EVENT, (message: ServerToAgentMessage) => this.handleMessage(message));
+    this.socket.on('disconnect', (reason) =>
+      this.logger.warn(`Disconnected from control plane: ${reason}`),
+    );
+    this.socket.on('connect_error', (err) =>
+      this.logger.error(`Connection error: ${err.message}`),
+    );
+    this.socket.on(PROTOCOL_EVENT, (message: ServerToAgentMessage) =>
+      this.handleMessage(message),
+    );
   }
 
   onModuleDestroy(): void {
@@ -61,13 +84,20 @@ export class AgentConnectionService implements OnModuleInit, OnModuleDestroy {
   private async handleConnect(agentToken: string): Promise<void> {
     this.logger.log('Connected — registering node...');
     const hostInfo = await this.collectHostInfo();
-    this.send({ type: 'agent.register', nodeId: this.nodeId, agentToken, hostInfo });
+    this.send({
+      type: 'agent.register',
+      nodeId: this.nodeId,
+      agentToken,
+      hostInfo,
+    });
   }
 
   private handleMessage(message: ServerToAgentMessage): void {
     switch (message.type) {
       case 'agent.registered':
-        this.logger.log(`Registered with control plane as node ${message.nodeId}`);
+        this.logger.log(
+          `Registered with control plane as node ${message.nodeId}`,
+        );
         this.startHeartbeat();
         return;
       case 'agent.registrationFailed':
@@ -75,27 +105,56 @@ export class AgentConnectionService implements OnModuleInit, OnModuleDestroy {
         return;
       case 'command.createContainer':
         void this.runCommand(message.requestId, async () => {
-          await this.docker.createContainer(message.serverId, message.dockerImage, message.ports, message.config);
-          this.send({ type: 'container.status', serverId: message.serverId, status: ServerStatus.STOPPED });
+          await this.docker.createContainer(
+            message.serverId,
+            message.dockerImage,
+            message.ports,
+            message.config,
+          );
+          this.send({
+            type: 'container.status',
+            serverId: message.serverId,
+            status: ServerStatus.STOPPED,
+          });
         });
         return;
       case 'command.startContainer':
         void this.runCommand(message.requestId, async () => {
-          this.send({ type: 'container.status', serverId: message.serverId, status: ServerStatus.STARTING });
+          this.send({
+            type: 'container.status',
+            serverId: message.serverId,
+            status: ServerStatus.STARTING,
+          });
           await this.docker.startContainer(message.serverId);
-          this.send({ type: 'container.status', serverId: message.serverId, status: ServerStatus.RUNNING });
+          this.send({
+            type: 'container.status',
+            serverId: message.serverId,
+            status: ServerStatus.RUNNING,
+          });
         });
         return;
       case 'command.stopContainer':
         void this.runCommand(message.requestId, async () => {
-          this.send({ type: 'container.status', serverId: message.serverId, status: ServerStatus.STOPPING });
+          this.send({
+            type: 'container.status',
+            serverId: message.serverId,
+            status: ServerStatus.STOPPING,
+          });
           await this.docker.stopContainer(message.serverId);
-          this.send({ type: 'container.status', serverId: message.serverId, status: ServerStatus.STOPPED });
+          this.send({
+            type: 'container.status',
+            serverId: message.serverId,
+            status: ServerStatus.STOPPED,
+          });
         });
         return;
       case 'command.deleteContainer':
         void this.runCommand(message.requestId, async () => {
-          this.send({ type: 'container.status', serverId: message.serverId, status: ServerStatus.DELETING });
+          this.send({
+            type: 'container.status',
+            serverId: message.serverId,
+            status: ServerStatus.DELETING,
+          });
           await this.docker.deleteContainer(message.serverId);
         });
         return;
@@ -112,12 +171,17 @@ export class AgentConnectionService implements OnModuleInit, OnModuleDestroy {
         });
         return;
       default:
-        this.logger.warn(`Unhandled control-plane message: ${(message as { type: string }).type}`);
+        this.logger.warn(
+          `Unhandled control-plane message: ${(message as { type: string }).type}`,
+        );
     }
   }
 
   /** Runs a Docker action, translating success/failure into command.ack / command.error. */
-  private async runCommand(requestId: string, action: () => Promise<void>): Promise<void> {
+  private async runCommand(
+    requestId: string,
+    action: () => Promise<void>,
+  ): Promise<void> {
     try {
       await action();
       this.send({ type: 'command.ack', requestId });

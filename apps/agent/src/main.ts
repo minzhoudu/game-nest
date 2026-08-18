@@ -7,4 +7,4 @@ async function bootstrap() {
   // outbound WebSocket connection to the control plane (see API_URL below).
   await app.listen(process.env.PORT ?? 3001);
 }
-bootstrap();
+void bootstrap();

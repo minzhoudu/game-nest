@@ -3,8 +3,14 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { randomUUID } from 'node:crypto';
 import { ServerStatus } from '@gamenest/shared-types';
 import type { GameServerConfig, Id } from '@gamenest/shared-types';
-import { AGENT_CONTAINER_LOG, AGENT_CONTAINER_STATUS } from '../nodes/agent-events';
-import type { AgentContainerLogEvent, AgentContainerStatusEvent } from '../nodes/agent-events';
+import {
+  AGENT_CONTAINER_LOG,
+  AGENT_CONTAINER_STATUS,
+} from '../nodes/agent-events';
+import type {
+  AgentContainerLogEvent,
+  AgentContainerStatusEvent,
+} from '../nodes/agent-events';
 
 const MAX_LOG_LINES = 200;
 
@@ -29,7 +35,12 @@ export class ServersService {
   private readonly servers = new Map<Id, ManagedServer>();
   private readonly logs = new Map<Id, string[]>();
 
-  create(input: { nodeId: Id; templateSlug: string; name: string; config: GameServerConfig }): ManagedServer {
+  create(input: {
+    nodeId: Id;
+    templateSlug: string;
+    name: string;
+    config: GameServerConfig;
+  }): ManagedServer {
     const server: ManagedServer = {
       id: randomUUID(),
       nodeId: input.nodeId,

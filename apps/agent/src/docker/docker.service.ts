@@ -78,12 +78,12 @@ export class DockerService {
     onLine: (line: string) => void,
   ): Promise<() => void> {
     const container = this.getContainer(serverId);
-    const stream = (await container.logs({
+    const stream = await container.logs({
       follow: true,
       stdout: true,
       stderr: true,
       tail: 100,
-    })) as NodeJS.ReadableStream;
+    });
 
     const lines = new PassThrough();
     stream.pipe(lines);
@@ -120,7 +120,7 @@ export class DockerService {
       `Pulling image ${image} — this can take a while the first time...`,
     );
     await new Promise<void>((resolve, reject) => {
-      this.docker.pull(
+      void this.docker.pull(
         image,
         (err: Error | null, stream: NodeJS.ReadableStream) => {
           if (err) return reject(err);
