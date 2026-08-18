@@ -11,3 +11,6 @@ Thumbs.db
 *.tsbuildinfo
 coverage/
 .gamenest-node-id
+
+# Local project-tracking memory — not for the repo, see PLANNER.md itself.
+PLANNER.md
