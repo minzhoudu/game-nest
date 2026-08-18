@@ -71,8 +71,9 @@ export class AgentConnectionService implements OnModuleInit, OnModuleDestroy {
     this.socket.on('connect_error', (err) =>
       this.logger.error(`Connection error: ${err.message}`),
     );
-    this.socket.on(PROTOCOL_EVENT, (message: ServerToAgentMessage) =>
-      this.handleMessage(message),
+    this.socket.on(
+      PROTOCOL_EVENT,
+      (message: ServerToAgentMessage) => void this.handleMessage(message),
     );
   }
 
@@ -92,7 +93,12 @@ export class AgentConnectionService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  private handleMessage(message: ServerToAgentMessage): void {
+  /**
+   * Returns a Promise (rather than being fire-and-forget internally) purely
+   * so tests can await it — the real caller (the socket listener above)
+   * still doesn't wait on it, same as before.
+   */
+  private async handleMessage(message: ServerToAgentMessage): Promise<void> {
     switch (message.type) {
       case 'agent.registered':
         this.logger.log(
@@ -104,7 +110,7 @@ export class AgentConnectionService implements OnModuleInit, OnModuleDestroy {
         this.logger.error(`Registration rejected: ${message.reason}`);
         return;
       case 'command.createContainer':
-        void this.runCommand(message.requestId, async () => {
+        await this.runCommand(message.requestId, async () => {
           await this.docker.createContainer(
             message.serverId,
             message.dockerImage,
@@ -119,7 +125,7 @@ export class AgentConnectionService implements OnModuleInit, OnModuleDestroy {
         });
         return;
       case 'command.startContainer':
-        void this.runCommand(message.requestId, async () => {
+        await this.runCommand(message.requestId, async () => {
           this.send({
             type: 'container.status',
             serverId: message.serverId,
@@ -134,7 +140,7 @@ export class AgentConnectionService implements OnModuleInit, OnModuleDestroy {
         });
         return;
       case 'command.stopContainer':
-        void this.runCommand(message.requestId, async () => {
+        await this.runCommand(message.requestId, async () => {
           this.send({
             type: 'container.status',
             serverId: message.serverId,
@@ -149,7 +155,7 @@ export class AgentConnectionService implements OnModuleInit, OnModuleDestroy {
         });
         return;
       case 'command.deleteContainer':
-        void this.runCommand(message.requestId, async () => {
+        await this.runCommand(message.requestId, async () => {
           this.send({
             type: 'container.status',
             serverId: message.serverId,
@@ -159,7 +165,7 @@ export class AgentConnectionService implements OnModuleInit, OnModuleDestroy {
         });
         return;
       case 'command.streamLogs':
-        void this.runCommand(message.requestId, async () => {
+        await this.runCommand(message.requestId, async () => {
           await this.docker.streamLogs(message.serverId, (line) => {
             this.send({
               type: 'container.log',

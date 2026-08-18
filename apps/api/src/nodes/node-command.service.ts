@@ -10,7 +10,7 @@ import type {
 } from './agent-events';
 import { NodeRegistryService } from './node-registry.service';
 
-const COMMAND_TIMEOUT_MS = 30_000;
+export const COMMAND_TIMEOUT_MS = 30_000;
 
 interface PendingCommand {
   resolve: () => void;

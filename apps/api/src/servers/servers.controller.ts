@@ -13,6 +13,7 @@ import { NodeCommandService } from '../nodes/node-command.service';
 import { NodeRegistryService } from '../nodes/node-registry.service';
 import { TemplatesService } from '../templates/templates.service';
 import type { CreateServerDto } from './dto/create-server.dto';
+import { resolveEnv } from './resolve-env';
 import { ServersService } from './servers.service';
 
 @Controller('servers')
@@ -58,7 +59,7 @@ export class ServersController {
       throw new NotFoundException(`No template "${dto.templateSlug}"`);
     }
 
-    const env = this.resolveEnv(template.envSchema, dto.env ?? {});
+    const env = resolveEnv(template.envSchema, dto.env ?? {});
     const server = this.servers.create({
       nodeId: dto.nodeId,
       templateSlug: dto.templateSlug,
@@ -133,31 +134,5 @@ export class ServersController {
     });
     this.servers.remove(id);
     return { deleted: true };
-  }
-
-  /** Merges the template's env defaults with the caller's overrides, stringified for Docker. */
-  private resolveEnv(
-    envSchema: {
-      key: string;
-      default?: string | number | boolean;
-      required?: boolean;
-    }[],
-    overrides: Record<string, string>,
-  ): Record<string, string> {
-    const env: Record<string, string> = {};
-    for (const field of envSchema) {
-      const value =
-        overrides[field.key] ??
-        (field.default !== undefined ? String(field.default) : undefined);
-      if (value === undefined) {
-        if (field.required)
-          throw new BadRequestException(
-            `Missing required field "${field.key}"`,
-          );
-        continue;
-      }
-      env[field.key] = value;
-    }
-    return env;
   }
 }
