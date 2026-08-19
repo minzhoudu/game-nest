@@ -8,7 +8,11 @@ import {
   NotFoundException,
   Param,
   Post,
+  UseGuards,
 } from '@nestjs/common';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/jwt-auth.guard';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { NodeCommandService } from '../nodes/node-command.service';
 import { NodeRegistryService } from '../nodes/node-registry.service';
 import { TemplatesService } from '../templates/templates.service';
@@ -17,6 +21,7 @@ import { resolveEnv } from './resolve-env';
 import { ServersService } from './servers.service';
 
 @Controller('servers')
+@UseGuards(JwtAuthGuard)
 export class ServersController {
   private readonly logger = new Logger(ServersController.name);
 
@@ -28,23 +33,26 @@ export class ServersController {
   ) {}
 
   @Get()
-  list() {
-    return this.servers.list();
+  list(@CurrentUser() user: AuthenticatedUser) {
+    return this.servers.listForOwner(user.id);
   }
 
   @Get(':id')
-  get(@Param('id') id: string) {
-    return this.servers.getOrThrow(id);
+  get(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.servers.getOwnedOrThrow(id, user.id);
   }
 
   @Get(':id/logs')
-  logs(@Param('id') id: string) {
-    this.servers.getOrThrow(id); // 404s if unknown
+  async logs(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    await this.servers.getOwnedOrThrow(id, user.id); // 404s if unknown or not yours
     return this.servers.getLogs(id);
   }
 
   @Post()
-  async create(@Body() dto: CreateServerDto) {
+  async create(
+    @Body() dto: CreateServerDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     if (!dto.nodeId || !dto.templateSlug || !dto.name) {
       throw new BadRequestException(
         'nodeId, templateSlug, and name are required',
@@ -54,15 +62,16 @@ export class ServersController {
       throw new BadRequestException(`Node ${dto.nodeId} is not connected`);
     }
 
-    const template = this.templates.getBySlug(dto.templateSlug);
+    const template = await this.templates.getBySlug(dto.templateSlug);
     if (!template) {
       throw new NotFoundException(`No template "${dto.templateSlug}"`);
     }
 
     const env = resolveEnv(template.envSchema, dto.env ?? {});
-    const server = this.servers.create({
+    const server = await this.servers.create({
+      ownerId: user.id,
       nodeId: dto.nodeId,
-      templateSlug: dto.templateSlug,
+      templateId: template.id,
       name: dto.name,
       config: { env },
     });
@@ -80,7 +89,7 @@ export class ServersController {
         serverId: server.id,
       });
     } catch (err) {
-      this.servers.remove(server.id);
+      await this.servers.remove(server.id, user.id);
       throw new BadRequestException(
         err instanceof Error ? err.message : String(err),
       );
@@ -102,37 +111,40 @@ export class ServersController {
         );
       });
 
-    return this.servers.get(server.id);
+    return server;
   }
 
   @Post(':id/start')
-  async start(@Param('id') id: string) {
-    const server = this.servers.getOrThrow(id);
+  async start(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    const server = await this.servers.getOwnedOrThrow(id, user.id);
     await this.commands.send(server.nodeId, {
       type: 'command.startContainer',
       serverId: id,
     });
-    return this.servers.get(id);
+    return this.servers.getOwnedOrThrow(id, user.id);
   }
 
   @Post(':id/stop')
-  async stop(@Param('id') id: string) {
-    const server = this.servers.getOrThrow(id);
+  async stop(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    const server = await this.servers.getOwnedOrThrow(id, user.id);
     await this.commands.send(server.nodeId, {
       type: 'command.stopContainer',
       serverId: id,
     });
-    return this.servers.get(id);
+    return this.servers.getOwnedOrThrow(id, user.id);
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    const server = this.servers.getOrThrow(id);
+  async remove(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const server = await this.servers.getOwnedOrThrow(id, user.id);
     await this.commands.send(server.nodeId, {
       type: 'command.deleteContainer',
       serverId: id,
     });
-    this.servers.remove(id);
+    await this.servers.remove(id, user.id);
     return { deleted: true };
   }
 }

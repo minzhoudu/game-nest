@@ -1,7 +1,9 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { NodeRegistryService } from './node-registry.service';
 
 @Controller('nodes')
+@UseGuards(JwtAuthGuard)
 export class NodesController {
   constructor(private readonly registry: NodeRegistryService) {}
 

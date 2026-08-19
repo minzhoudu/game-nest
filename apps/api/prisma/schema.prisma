@@ -30,6 +30,10 @@ enum ServerStatus {
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
+  /// Nullable so an OAuth-only account (Google, etc. — planned, not built
+  /// yet) never needs a fake password. Email/password is the only method
+  /// today, so this is always set in practice for now.
+  passwordHash String?
   createdAt DateTime @default(now())
 
   nodes   GameNode[]
@@ -40,6 +44,11 @@ model User {
 
 /// A host capable of running game server containers — a PC or a cloud VM.
 /// Named GameNode (not Node) to avoid colliding with Node.js's own types.
+///
+/// NOT persisted/queried yet — NodeRegistryService still tracks connected
+/// nodes purely in memory (see PLANNER.md). This model is a preview of the
+/// future per-node-ownership work; GameServer.nodeId below deliberately
+/// does NOT reference this table yet, since there's nothing in it.
 model GameNode {
   id        String    @id @default(uuid())
   ownerId   String
@@ -48,8 +57,6 @@ model GameNode {
   kind      NodeKind
   lastSeenAt DateTime?
   createdAt DateTime  @default(now())
-
-  servers GameServer[]
 
   @@map("nodes")
 }
@@ -77,8 +84,11 @@ model GameServer {
   id         String       @id @default(uuid())
   ownerId    String
   owner      User         @relation(fields: [ownerId], references: [id])
+  /// The connected agent's self-generated node id (NodeRegistryService, in
+  /// memory) — deliberately not an FK to GameNode, since that table isn't
+  /// populated yet. Not validated at the DB level; ServersController checks
+  /// the node is currently connected before creating a server.
   nodeId     String
-  node       GameNode     @relation(fields: [nodeId], references: [id])
   templateId String
   template   GameTemplate @relation(fields: [templateId], references: [id])
   name       String

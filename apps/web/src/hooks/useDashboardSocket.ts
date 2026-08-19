@@ -3,26 +3,33 @@ import { useEffect } from 'react';
 import { io } from 'socket.io-client';
 import { DASHBOARD_EVENT, DASHBOARD_NAMESPACE } from '@gamenest/shared-types';
 import type { DashboardEvent, NodeSummary, ServerSummary } from '@gamenest/shared-types';
+import { useAuth } from './useAuth';
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000';
 
 /**
- * Connects once to api's dashboard push channel and keeps the React Query
- * cache for ['nodes'] / ['servers'] / ['server-logs', id] in sync as events
- * arrive — this is what lets the rest of the app not poll. Mount once, near
- * the root (see App.tsx).
+ * Connects once (per token) to api's dashboard push channel and keeps the
+ * React Query cache for ['nodes'] / ['servers'] / ['server-logs', id] in
+ * sync as events arrive — this is what lets the rest of the app not poll.
+ * Mounted in Layout, so only runs for an authenticated session.
  *
- * On (re)connect the server always sends a fresh dashboard.snapshot first
- * (see DashboardGateway.handleConnection), so a dropped connection self-heals
- * without any extra logic here — socket.io's own reconnection handles it.
+ * The gateway requires auth on connect (DashboardGateway.handleConnection)
+ * and only sends server.* events for servers this token's user owns — see
+ * that file for why. On (re)connect the server always sends a fresh
+ * dashboard.snapshot first, so a dropped connection self-heals without any
+ * extra logic here — socket.io's own reconnection handles it.
  */
 export function useDashboardSocket(): void {
   const queryClient = useQueryClient();
+  const { token } = useAuth();
 
   useEffect(() => {
+    if (!token) return;
+
     const socket = io(`${API_URL}${DASHBOARD_NAMESPACE}`, {
       reconnection: true,
       reconnectionDelay: 2000,
+      auth: { token },
     });
 
     socket.on(DASHBOARD_EVENT, (event: DashboardEvent) => {
@@ -78,5 +85,5 @@ export function useDashboardSocket(): void {
     return () => {
       socket.disconnect();
     };
-  }, [queryClient]);
+  }, [queryClient, token]);
 }

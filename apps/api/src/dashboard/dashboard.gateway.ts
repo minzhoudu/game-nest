@@ -1,4 +1,6 @@
+import { Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
+import { JwtService } from '@nestjs/jwt';
 import {
   OnGatewayConnection,
   WebSocketGateway,
@@ -7,6 +9,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { DASHBOARD_EVENT, DASHBOARD_NAMESPACE } from '@gamenest/shared-types';
 import type { DashboardEvent, DashboardSnapshot } from '@gamenest/shared-types';
+import { verifyToken } from '../auth/jwt-auth.guard';
 import {
   AGENT_CONTAINER_LOG,
   AGENT_CONTAINER_STATUS,
@@ -27,54 +30,77 @@ import { NodeRegistryService } from '../nodes/node-registry.service';
 import { ServersService } from '../servers/servers.service';
 
 /**
- * Push-only channel for the web dashboard: a client connects, gets one
- * snapshot of current state, then receives incremental events as they
- * happen — no polling. The dashboard still sends actions (create/start/
- * stop/delete a server) through the plain REST API; this gateway never
- * receives messages from clients, only broadcasts to them.
+ * Push-only channel for the web dashboard: a client connects (authenticated
+ * — see handleConnection), gets one snapshot of current state, then
+ * receives incremental events as they happen — no polling. The dashboard
+ * still sends actions (create/start/stop/delete a server) through the plain
+ * REST API; this gateway never receives messages from clients.
  *
- * Every handler here just re-shapes an internal event (already flowing
- * through @nestjs/event-emitter for other reasons — see internal-events.ts)
- * into the DashboardEvent wire format and broadcasts it. No new state, no
- * new logic — this is purely a relay.
+ * Nodes are shared infrastructure (visible to every logged-in user, not
+ * owned) so node-connected/disconnected events broadcast to everyone.
+ * Servers are owned — each authenticated socket joins a room named after
+ * its user id, and server-created/status/removed/log events are routed
+ * with `.to(ownerId)` instead of a blanket broadcast, so nobody sees
+ * another user's servers over this channel even though they all share the
+ * same gateway.
  */
 @WebSocketGateway({ namespace: DASHBOARD_NAMESPACE, cors: { origin: '*' } })
 export class DashboardGateway implements OnGatewayConnection {
+  private readonly logger = new Logger(DashboardGateway.name);
+
   @WebSocketServer()
   server!: Server;
 
   constructor(
+    private readonly jwt: JwtService,
     private readonly nodeRegistry: NodeRegistryService,
     private readonly servers: ServersService,
   ) {}
 
-  handleConnection(client: Socket): void {
+  async handleConnection(client: Socket): Promise<void> {
+    const token = client.handshake.auth?.token as string | undefined;
+    const user = token ? await verifyToken(this.jwt, token) : undefined;
+    if (!user) {
+      this.logger.warn(`Rejected dashboard connection: missing/invalid token`);
+      client.disconnect(true);
+      return;
+    }
+
+    await client.join(user.id);
+
     const snapshot: DashboardSnapshot = {
       type: 'dashboard.snapshot',
       nodes: this.nodeRegistry.list(),
-      servers: this.servers.list(),
+      servers: await this.servers.listForOwner(user.id),
     };
     client.emit(DASHBOARD_EVENT, snapshot);
   }
 
   @OnEvent(NODE_CONNECTED)
   private onNodeConnected(node: NodeConnectedEvent): void {
-    this.broadcast({ type: 'node.connected', node });
+    this.broadcastAll({ type: 'node.connected', node });
   }
 
   @OnEvent(NODE_DISCONNECTED)
   private onNodeDisconnected(event: NodeDisconnectedEvent): void {
-    this.broadcast({ type: 'node.disconnected', nodeId: event.nodeId });
+    this.broadcastAll({ type: 'node.disconnected', nodeId: event.nodeId });
   }
 
   @OnEvent(SERVER_CREATED)
   private onServerCreated(event: ServerCreatedEvent): void {
-    this.broadcast({ type: 'server.created', server: event.server });
+    this.broadcastTo(event.ownerId, {
+      type: 'server.created',
+      server: event.server,
+    });
   }
 
   @OnEvent(AGENT_CONTAINER_STATUS)
-  private onServerStatus(event: AgentContainerStatusEvent): void {
-    this.broadcast({
+  private async onServerStatus(
+    event: AgentContainerStatusEvent,
+  ): Promise<void> {
+    const ownerId = await this.servers.getOwnerId(event.serverId);
+    if (!ownerId) return;
+    this.broadcastTo(ownerId, {
       type: 'server.status',
       serverId: event.serverId,
       status: event.status,
@@ -83,12 +109,17 @@ export class DashboardGateway implements OnGatewayConnection {
 
   @OnEvent(SERVER_REMOVED)
   private onServerRemoved(event: ServerRemovedEvent): void {
-    this.broadcast({ type: 'server.removed', serverId: event.serverId });
+    this.broadcastTo(event.ownerId, {
+      type: 'server.removed',
+      serverId: event.serverId,
+    });
   }
 
   @OnEvent(AGENT_CONTAINER_LOG)
-  private onServerLog(event: AgentContainerLogEvent): void {
-    this.broadcast({
+  private async onServerLog(event: AgentContainerLogEvent): Promise<void> {
+    const ownerId = await this.servers.getOwnerId(event.serverId);
+    if (!ownerId) return;
+    this.broadcastTo(ownerId, {
       type: 'server.log',
       serverId: event.serverId,
       line: event.line,
@@ -96,7 +127,11 @@ export class DashboardGateway implements OnGatewayConnection {
     });
   }
 
-  private broadcast(event: DashboardEvent): void {
+  private broadcastAll(event: DashboardEvent): void {
     this.server.emit(DASHBOARD_EVENT, event);
+  }
+
+  private broadcastTo(ownerId: string, event: DashboardEvent): void {
+    this.server.to(ownerId).emit(DASHBOARD_EVENT, event);
   }
 }

@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthModule } from './auth/auth.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { NodesModule } from './nodes/nodes.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -14,6 +15,7 @@ import { TemplatesModule } from './templates/templates.module';
     ConfigModule.forRoot({ isGlobal: true }),
     EventEmitterModule.forRoot(),
     PrismaModule,
+    AuthModule,
     NodesModule,
     TemplatesModule,
     ServersModule,

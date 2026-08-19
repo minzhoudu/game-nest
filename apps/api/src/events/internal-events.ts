@@ -49,8 +49,11 @@ export interface NodeDisconnectedEvent {
 
 export interface ServerCreatedEvent {
   server: ServerSummary;
+  /** Who to route this to on the dashboard socket — not part of the public ServerSummary. */
+  ownerId: Id;
 }
 
 export interface ServerRemovedEvent {
   serverId: Id;
+  ownerId: Id;
 }

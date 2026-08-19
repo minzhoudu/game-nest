@@ -1,12 +1,16 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
-import { randomUUID } from 'node:crypto';
 import { ServerStatus } from '@gamenest/shared-types';
 import type {
   GameServerConfig,
   Id,
   ServerSummary,
 } from '@gamenest/shared-types';
+import type {
+  GameServer as GameServerRow,
+  GameTemplate as GameTemplateRow,
+  Prisma,
+} from '@prisma/client';
 import {
   AGENT_CONTAINER_LOG,
   AGENT_CONTAINER_STATUS,
@@ -17,82 +21,127 @@ import type {
   AgentContainerLogEvent,
   AgentContainerStatusEvent,
 } from '../events/internal-events';
+import { PrismaService } from '../prisma/prisma.service';
 
 const MAX_LOG_LINES = 200;
 
+type RowWithTemplate = GameServerRow & { template: GameTemplateRow };
+
 /**
- * In-memory for now, same as NodeRegistryService — no GameServer table yet.
- * Status/logs are updated reactively as container.status / container.log
- * events arrive from whichever node owns the server (see internal-events.ts).
- * create()/remove() emit their own events so DashboardGateway can push
- * server.created/server.removed to browsers without importing this module.
+ * Prisma-backed — GameServer rows are the durable source of truth, scoped
+ * per-owner (see getOwnedOrThrow). Logs stay in-memory only (getLogs/
+ * handleLog below): ephemeral operational scrollback, not core state worth
+ * a table — see PLANNER.md.
  */
 @Injectable()
 export class ServersService {
   private readonly logger = new Logger(ServersService.name);
-  private readonly servers = new Map<Id, ServerSummary>();
   private readonly logs = new Map<Id, string[]>();
 
-  constructor(private readonly events: EventEmitter2) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: EventEmitter2,
+  ) {}
 
-  create(input: {
+  async create(input: {
+    ownerId: Id;
     nodeId: Id;
-    templateSlug: string;
+    templateId: Id;
     name: string;
     config: GameServerConfig;
-  }): ServerSummary {
-    const server: ServerSummary = {
-      id: randomUUID(),
-      nodeId: input.nodeId,
-      templateSlug: input.templateSlug,
-      name: input.name,
-      status: ServerStatus.CREATING,
-      config: input.config,
-      createdAt: new Date().toISOString(),
-    };
-    this.servers.set(server.id, server);
-    this.events.emit(SERVER_CREATED, { server });
+  }): Promise<ServerSummary> {
+    const row = await this.prisma.gameServer.create({
+      data: {
+        ownerId: input.ownerId,
+        nodeId: input.nodeId,
+        templateId: input.templateId,
+        name: input.name,
+        status: ServerStatus.CREATING,
+        config: input.config as unknown as Prisma.InputJsonValue,
+      },
+      include: { template: true },
+    });
+
+    const server = fromRow(row);
+    this.events.emit(SERVER_CREATED, { server, ownerId: input.ownerId });
     return server;
   }
 
-  list(): ServerSummary[] {
-    return [...this.servers.values()];
+  listForOwner(ownerId: Id): Promise<ServerSummary[]> {
+    return this.prisma.gameServer
+      .findMany({
+        where: { ownerId },
+        include: { template: true },
+        orderBy: { createdAt: 'desc' },
+      })
+      .then((rows) => rows.map(fromRow));
   }
 
-  get(id: Id): ServerSummary | undefined {
-    return this.servers.get(id);
+  /** Scoped to the requesting owner — a mismatched id is indistinguishable from a missing one. */
+  async getOwnedOrThrow(id: Id, ownerId: Id): Promise<ServerSummary> {
+    const row = await this.prisma.gameServer.findFirst({
+      where: { id, ownerId },
+      include: { template: true },
+    });
+    if (!row) throw new NotFoundException(`No server ${id}`);
+    return fromRow(row);
   }
 
-  getOrThrow(id: Id): ServerSummary {
-    const server = this.get(id);
-    if (!server) throw new NotFoundException(`No server ${id}`);
-    return server;
+  /** For DashboardGateway to route a broadcast to the right socket room — not exposed over the wire. */
+  async getOwnerId(id: Id): Promise<Id | undefined> {
+    const row = await this.prisma.gameServer.findUnique({
+      where: { id },
+      select: { ownerId: true },
+    });
+    return row?.ownerId;
   }
 
   getLogs(id: Id): string[] {
     return this.logs.get(id) ?? [];
   }
 
-  remove(id: Id): void {
-    this.servers.delete(id);
+  /** Scoped the same way as getOwnedOrThrow — throws if this isn't the caller's server. */
+  async remove(id: Id, ownerId: Id): Promise<void> {
+    await this.getOwnedOrThrow(id, ownerId);
+    await this.prisma.gameServer.delete({ where: { id } });
     this.logs.delete(id);
-    this.events.emit(SERVER_REMOVED, { serverId: id });
+    this.events.emit(SERVER_REMOVED, { serverId: id, ownerId });
   }
 
   @OnEvent(AGENT_CONTAINER_STATUS)
-  private handleStatus(event: AgentContainerStatusEvent): void {
-    const server = this.servers.get(event.serverId);
-    if (!server) return; // status for a server we don't (or no longer) know about
-    server.status = event.status;
-    this.logger.log(`server ${server.id} (${server.name}) -> ${event.status}`);
+  private async handleStatus(event: AgentContainerStatusEvent): Promise<void> {
+    try {
+      await this.prisma.gameServer.update({
+        where: { id: event.serverId },
+        data: { status: event.status },
+      });
+      this.logger.log(`server ${event.serverId} -> ${event.status}`);
+    } catch {
+      // Row doesn't exist (already deleted) — a status update for a server we no longer track. Ignore.
+    }
   }
 
   @OnEvent(AGENT_CONTAINER_LOG)
   private handleLog(event: AgentContainerLogEvent): void {
-    if (!this.servers.has(event.serverId)) return;
+    // No existence check here (unlike before Prisma) — a DB round-trip per
+    // log line would be wasteful at this frequency. remove() clears this
+    // map on delete; the agent stops emitting for a gone container anyway,
+    // so a stray line or two after deletion is a non-issue in practice.
     const lines = this.logs.get(event.serverId) ?? [];
     lines.push(event.line);
     if (lines.length > MAX_LOG_LINES) lines.shift();
     this.logs.set(event.serverId, lines);
   }
+}
+
+function fromRow(row: RowWithTemplate): ServerSummary {
+  return {
+    id: row.id,
+    nodeId: row.nodeId,
+    templateSlug: row.template.slug,
+    name: row.name,
+    status: row.status as ServerStatus,
+    config: row.config as unknown as GameServerConfig,
+    createdAt: row.createdAt.toISOString(),
+  };
 }

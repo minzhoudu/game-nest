@@ -17,11 +17,15 @@ apps/
            the dashboard talks to api over /dashboard (DashboardGateway) for
            live push — no polling.
   api/     NestJS control plane (REST + WebSocket gateways, owns Postgres)
-           - /templates          available games (hardcoded for now)
-           - /servers            create/start/stop/delete a server, its logs
-           - /nodes              connected agents
-           - WS /agent           agents connect here (NodesGateway)
-           - WS /dashboard       browsers connect here for live push (DashboardGateway)
+           - /auth                register/login, issues a JWT
+           - /templates            available games (hardcoded for now)
+           - /servers              create/start/stop/delete a server, its logs
+                                    — all scoped to the logged-in user
+           - /nodes                connected agents — shared, not owned
+           - WS /agent             agents connect here (NodesGateway)
+           - WS /dashboard         browsers connect here for live push
+                                    (DashboardGateway) — authenticated, and
+                                    server events are routed per-owner
   agent/   NestJS node agent — runs on any host that hosts game servers.
            Dials OUT to api/ over WebSocket (works behind home-router NAT),
            executes Docker commands locally via dockerode (DockerService).
@@ -34,6 +38,17 @@ packages/
 See [`packages/shared-types/src/agent-protocol.ts`](packages/shared-types/src/agent-protocol.ts)
 for the full rationale on the control-plane/agent split.
 
+## Design notes
+
+**Servers are owned per-user; nodes are shared infrastructure, not owned.**
+The original pitch was "I run the agent on my PC, my friends spin up servers
+on it" — if nodes were per-user-owned too, that breaks, since friends don't
+have their own agent. So: any logged-in user can deploy to any connected
+node, but each user only sees and manages their own servers. `GameNode` has
+an `ownerId` column in the Prisma schema already (for whenever real
+per-node tokens replace the one shared secret), but nothing populates it
+yet — nodes still aren't persisted at all, see Status below.
+
 ## Getting started
 
 Requires Node >= 20, [pnpm](https://pnpm.io), and Docker (for Postgres now, and
@@ -43,10 +58,15 @@ for running the agent against real containers later).
 pnpm install
 cp apps/api/.env.example apps/api/.env
 cp apps/agent/.env.example apps/agent/.env
+# edit apps/api/.env: set JWT_SECRET to any long random string
 pnpm db:up                # starts Postgres via docker-compose
 pnpm --filter @gamenest/api prisma:migrate   # applies the schema (first run only)
 pnpm dev
 ```
+
+First run: open the dashboard, sign up an account (email/password — no email
+verification, this isn't gated on anything). Everything after that is scoped
+to whoever's logged in.
 
 `pnpm dev` runs `web`, `api`, and `agent` together via Turborepo. Individual apps:
 
@@ -71,7 +91,30 @@ pnpm db:down                                 # stop Postgres
 
 ## Status
 
-**The dashboard is multi-page now, with real URLs per page** (React Router)
+**Accounts + persistence are in.** Email/password auth (JWT), and
+`GameServer` rows are real Postgres rows now, owned per-user — restart `api`
+and your servers are still there (the Docker containers never stopped
+either; `api` restarting only used to lose track of them, verified fixed by
+actually killing and restarting `api` mid-session and confirming a server
+survived with correct status). Every `/servers`/`/nodes`/`/templates`
+request requires a bearer token (`JwtAuthGuard`); `/servers` is additionally
+scoped so you only ever see your own — verified by holding two different
+users' tokens simultaneously and confirming each `GET /servers` returns only
+that user's data. Nodes stay shared infrastructure, not owned by anyone —
+see Design notes below for why. Google/OAuth login is planned but not
+started; the schema (`User.passwordHash` nullable) is shaped so adding it
+later won't need a breaking migration.
+
+The dashboard's live-push channel (`/dashboard`) is authenticated too: a
+socket without a valid token gets disconnected on connect, and
+server-created/status/removed/log events are routed to a room named after
+the owning user's id rather than broadcast to everyone — so two people using
+the same GameNest instance never see each other's servers, even over the
+push channel. Verified with two real accounts in two tabs. Node events
+(connect/disconnect) still broadcast to everyone, matching nodes being
+shared.
+
+**The dashboard is multi-page, with real URLs per page** (React Router)
 instead of local component state — refreshing `/servers/:id` or
 `/servers/:id/logs` lands you back on the same page with the same data,
 rather than resetting to the list. The list page (`/`) shows just name,
@@ -83,45 +126,41 @@ port — only actually correct when the node is the same machine as `api`
 (true for local dev, not once nodes can be remote; see
 `apps/web/src/lib/connect-address.ts`).
 
-**The dashboard works end to end, live — no polling.** Open
-`http://localhost:5173` with `api` + at least one `agent` running: create a
-server (pick a node, a game, a name), watch it go `creating` → `running`,
-watch its logs stream in as they happen, stop/start/delete it. Every one of
-those state changes arrives pushed over the `/dashboard` WebSocket the
-instant it happens — the dashboard fetches each list once on load and
-otherwise just reacts to events. Verified against real Docker containers in
-a real browser with the network tab open: `POST /servers` fires once,
-`GET /servers/:id/logs` fires once even across a full Minecraft boot (dozens
-of lines arriving live), no repeat requests ever.
+**The dashboard works end to end, live — no polling.** Create a server (pick
+a node, a game, a name), watch it go `creating` → `running`, watch its logs
+stream in as they happen, stop/start/delete it — every state change arrives
+pushed over the `/dashboard` WebSocket the instant it happens; REST calls
+fire once on load, not on an interval. Verified against real Docker
+containers with the network tab open: no repeat requests ever, even across a
+full Minecraft boot.
 
 Under the hood: internal events already flowed through
-`@nestjs/event-emitter` for other reasons (decoupling `NodesGateway` from
-`ServersModule`) — `DashboardGateway` just also listens to that same bus and
-re-shapes each event into the `DashboardEvent` wire format
-(`packages/shared-types/src/dashboard-protocol.ts`), broadcasting to every
-connected browser. `NodeSummary`/`ServerSummary` in `shared-types` are now
-the one shape used for the initial snapshot, every REST response, and every
-push event — no more hand-duplicated frontend types.
+`@nestjs/event-emitter` (`apps/api/src/events/internal-events.ts`) to
+decouple `NodesGateway`/`ServersService`/`DashboardGateway` from importing
+each other — `DashboardGateway` listens to that same bus and re-shapes each
+event into the `DashboardEvent` wire format
+(`packages/shared-types/src/dashboard-protocol.ts`).
+`NodeSummary`/`ServerSummary` in `shared-types` are the one shape used for
+REST responses, the dashboard snapshot, and every push event.
 
-The agent ↔ control-plane WebSocket handshake (separate channel, `/agent`):
-`agent` generates (and persists) a stable node id, dials out to `api`,
-registers with a shared-secret token, heartbeats every 15s. `api` exposes a
-request/response layer over that socket (`NodeCommandService`) so REST calls
-can `await` a command's `command.ack`. Auth is a single shared secret for
-now (`AGENT_REGISTRATION_SECRET` / `AGENT_TOKEN`) — fine for you + friends,
-will become per-node issued tokens once nodes are persisted.
+The agent ↔ control-plane WebSocket handshake (separate channel, `/agent`,
+not the same auth as users): `agent` generates (and persists) a stable node
+id, dials out to `api`, registers with a shared-secret token, heartbeats
+every 15s. `api` exposes a request/response layer over that socket
+(`NodeCommandService`) so REST calls can `await` a command's `command.ack`.
+Node auth is still a single shared secret (`AGENT_REGISTRATION_SECRET` /
+`AGENT_TOKEN`) — fine for "you run the node, friends use it," becomes
+per-node issued tokens if/when nodes need finer-grained ownership.
 
 Only one `GameTemplate` exists (`minecraft-java`, hardcoded in
-`TemplatesService` — see [apps/api/src/templates](apps/api/src/templates)).
-Postgres + Prisma are migrated and connected but **nothing persists through
-them yet** — nodes and servers both still live in in-memory maps, so an `api`
-restart forgets every server that exists (the Docker containers themselves
-keep running fine; the control plane just loses track of them). That's the
-next real gap to close.
+`TemplatesService` but now upserted into Postgres on boot so
+`GameServer.templateId` is a real FK — see
+[apps/api/src/templates](apps/api/src/templates)).
 
-Not done yet: persistence (see above), a second GameTemplate, real port
-allocation (currently host port == container port, so only one server per
-port per node at a time), and any auth beyond the one shared secret.
+Not done yet: a second GameTemplate, real port allocation (currently host
+port == container port, so only one server per port per node at a time),
+Google/OAuth login, and `GameNode` itself isn't persisted (nodes are
+deliberately still connection-scoped/in-memory — see Design notes).
 
 **Running the dashboard locally:**
 

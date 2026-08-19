@@ -23,6 +23,32 @@
   color: inherit;
 }
 
+.app-header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+/* --- auth pages -----------------------------------------------------------*/
+
+.auth-page {
+  max-width: 360px;
+  margin: 15vh auto 0;
+  padding: 0 20px;
+}
+
+.auth-form h2 {
+  margin-bottom: 4px;
+}
+
 /* --- links --------------------------------------------------------------*/
 
 a {
