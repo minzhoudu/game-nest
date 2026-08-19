@@ -7,9 +7,15 @@ own PC while developing, or on a cloud VM later — from a web dashboard.
 
 ```
 apps/
-  web/     React + Vite dashboard. Two WS channels involved: agents talk to
-           api over /agent (below); the dashboard talks to api over
-           /dashboard (DashboardGateway) for live push — no polling.
+  web/     React + Vite dashboard, React Router for real URLs per page:
+             /                  server list (info only — name, status,
+                                connect address+copy; no actions)
+             /servers/new       create-server form
+             /servers/:id       detail page — start/stop/delete
+             /servers/:id/logs  logs only
+           Two WS channels involved: agents talk to api over /agent (below);
+           the dashboard talks to api over /dashboard (DashboardGateway) for
+           live push — no polling.
   api/     NestJS control plane (REST + WebSocket gateways, owns Postgres)
            - /templates          available games (hardcoded for now)
            - /servers            create/start/stop/delete a server, its logs
@@ -64,6 +70,18 @@ pnpm db:down                                 # stop Postgres
 ```
 
 ## Status
+
+**The dashboard is multi-page now, with real URLs per page** (React Router)
+instead of local component state — refreshing `/servers/:id` or
+`/servers/:id/logs` lands you back on the same page with the same data,
+rather than resetting to the list. The list page (`/`) shows just name,
+status, and a copyable connect address, no action buttons; actions
+(start/stop/delete) live on the detail page (`/servers/:id`); logs are their
+own page (`/servers/:id/logs`). The connect address shown is a best-effort
+`host:port` derived from `VITE_API_URL`'s hostname + the template's game
+port — only actually correct when the node is the same machine as `api`
+(true for local dev, not once nodes can be remote; see
+`apps/web/src/lib/connect-address.ts`).
 
 **The dashboard works end to end, live — no polling.** Open
 `http://localhost:5173` with `api` + at least one `agent` running: create a

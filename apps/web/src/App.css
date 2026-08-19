@@ -18,6 +18,28 @@
   letter-spacing: -0.02em;
 }
 
+.app-title {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* --- links --------------------------------------------------------------*/
+
+a {
+  color: var(--accent);
+}
+
+.back-link {
+  display: inline-block;
+  font-size: 13px;
+  text-decoration: none;
+  color: var(--text);
+  margin-bottom: 14px;
+}
+.back-link:hover {
+  color: var(--accent);
+}
+
 /* --- nodes bar ------------------------------------------------------- */
 
 .nodes-bar {
@@ -72,6 +94,21 @@
   border-radius: 10px;
   padding: 16px;
   background: var(--bg-alt);
+}
+
+.card-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  transition:
+    border-color 0.15s,
+    transform 0.1s;
+}
+.card-link:hover {
+  border-color: var(--accent);
+}
+.card-link:active {
+  transform: scale(0.995);
 }
 
 .card-header {
@@ -157,6 +194,26 @@ button.ghost {
 .badge-error {
   background: color-mix(in srgb, var(--danger) 18%, transparent);
   color: var(--danger);
+}
+
+/* --- copyable address -----------------------------------------------------*/
+
+.copyable-address {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.copyable-address code {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--border);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+.copy-btn {
+  padding: 3px 8px;
+  font-size: 11px;
 }
 
 /* --- logs ---------------------------------------------------------------*/

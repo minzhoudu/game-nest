@@ -9,7 +9,7 @@ export interface CreateServerInput {
   env?: Record<string, string>;
 }
 
-const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000';
+export const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000';
 
 class ApiError extends Error {}
 
