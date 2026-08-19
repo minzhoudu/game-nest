@@ -67,4 +67,38 @@ describe('resolveEnv', () => {
 
     expect(resolveEnv(schema, {})).toEqual({ EULA: 'true' });
   });
+
+  it('appends the unit to a range field\'s numeric default (e.g. 2 -> "2G")', () => {
+    const schema: EnvVarSchema[] = [
+      {
+        key: 'MEMORY',
+        label: 'Memory',
+        type: 'range',
+        default: 2,
+        min: 1,
+        max: 8,
+        step: 1,
+        unit: 'G',
+      },
+    ];
+
+    expect(resolveEnv(schema, {})).toEqual({ MEMORY: '2G' });
+  });
+
+  it('still lets an override win for a range field, used as-is', () => {
+    const schema: EnvVarSchema[] = [
+      {
+        key: 'MEMORY',
+        label: 'Memory',
+        type: 'range',
+        default: 2,
+        min: 1,
+        max: 8,
+        step: 1,
+        unit: 'G',
+      },
+    ];
+
+    expect(resolveEnv(schema, { MEMORY: '4G' })).toEqual({ MEMORY: '4G' });
+  });
 });

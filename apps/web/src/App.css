@@ -297,6 +297,20 @@ button.ghost {
   color: var(--text-h);
 }
 
+.field input[type='range'] {
+  border: none;
+  padding: 0;
+  background: transparent;
+  accent-color: var(--accent);
+  width: 100%;
+}
+
+.field-hint {
+  font-size: 11px;
+  color: var(--text);
+  margin: 0;
+}
+
 .field-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

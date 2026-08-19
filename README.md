@@ -152,15 +152,43 @@ Node auth is still a single shared secret (`AGENT_REGISTRATION_SECRET` /
 `AGENT_TOKEN`) — fine for "you run the node, friends use it," becomes
 per-node issued tokens if/when nodes need finer-grained ownership.
 
-Only one `GameTemplate` exists (`minecraft-java`, hardcoded in
-`TemplatesService` but now upserted into Postgres on boot so
+**Two `GameTemplate`s now: Minecraft (Java) and 7 Days to Die**, both
+hardcoded in `TemplatesService` but upserted into Postgres on boot so
 `GameServer.templateId` is a real FK — see
-[apps/api/src/templates](apps/api/src/templates)).
+[apps/api/src/templates](apps/api/src/templates). 7 Days to Die
+(`vinanrra/7dtd-server`) has a much sparser "Advanced options" than
+Minecraft — its dedicated server configures gameplay settings (name,
+password, difficulty, max players) via an XML file inside the container,
+not env vars, so none of that is exposed here yet (would need this app to
+write a config file into a volume at container-create time — a real future
+feature, not built). Verified live: created a real server through the API,
+confirmed the container picked up `VERSION=stable` from its own logs, and
+watched it correctly proceed into the SteamCMD install/download step before
+stopping the test (didn't wait through the full multi-GB download).
 
-Not done yet: a second GameTemplate, real port allocation (currently host
-port == container port, so only one server per port per node at a time),
-Google/OAuth login, and `GameNode` itself isn't persisted (nodes are
-deliberately still connection-scoped/in-memory — see Design notes).
+`EnvVarSchema` (`packages/shared-types/src/entities.ts`) grew `select` and
+`range` field types so "Advanced options" can offer real constraints
+instead of free text — Minecraft's version is now a dropdown of known-good
+versions, memory is a slider (1–8 GB, deliberately constrained to whole
+numbers — the intent is this becomes the basis for billing by memory tier
+later), and difficulty is a dropdown instead of arbitrary text. A `hidden`
+flag also exists for env vars a template needs but shouldn't ask the user
+about (7 Days to Die's `START_MODE`).
+
+Not done yet: real port allocation (currently host port == container port,
+so only one server per port per node at a time — this is also why the
+Minecraft port-conflict bug below was easy to hit), Google/OAuth login, and
+`GameNode` itself isn't persisted (nodes are deliberately still
+connection-scoped/in-memory — see Design notes).
+
+**Bug found and fixed while testing this**: if `command.createContainer`
+succeeded but the subsequent `command.startContainer` failed (e.g. a port
+already in use), the container was left orphaned on the node forever — only
+the database row got cleaned up. `ServersController.create()`'s error path
+now also best-effort sends `command.deleteContainer` before giving up.
+Reproduced the failure twice (real port conflict) to confirm: broken before
+the fix (orphaned container left behind), clean after (nothing left,
+`docker ps -a` empty).
 
 **Running the dashboard locally:**
 

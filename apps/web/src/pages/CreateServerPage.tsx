@@ -3,13 +3,17 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { EnvVarSchema } from '@gamenest/shared-types';
 import { api } from '../api/client';
+import { EnvVarField } from '../components/EnvVarField';
 import { useNodes } from '../hooks/useNodes';
 import { useTemplates } from '../hooks/useTemplates';
 
 function defaultsFor(envSchema: EnvVarSchema[]): Record<string, string> {
   const env: Record<string, string> = {};
   for (const field of envSchema) {
-    if (field.default !== undefined) env[field.key] = String(field.default);
+    if (field.default === undefined) continue;
+    // range fields store a plain number (e.g. 2, "2 GB") — the actual env
+    // value needs the unit appended, matching resolve-env.ts server-side.
+    env[field.key] = field.type === 'range' && field.unit ? `${field.default}${field.unit}` : String(field.default);
   }
   return env;
 }
@@ -106,31 +110,20 @@ export function CreateServerPage() {
           </div>
         </div>
 
-        {template && template.envSchema.length > 0 && (
+        {template && template.envSchema.some((f) => !f.hidden) && (
           <details className="advanced">
             <summary>Advanced options</summary>
             <div className="field-grid">
-              {template.envSchema.map((field) =>
-                field.type === 'boolean' ? (
-                  <label className="field-checkbox" key={field.key}>
-                    <input
-                      type="checkbox"
-                      checked={env[field.key] === 'true'}
-                      onChange={(e) => setEnv((prev) => ({ ...prev, [field.key]: String(e.target.checked) }))}
-                    />
-                    {field.label}
-                  </label>
-                ) : (
-                  <div className="field" key={field.key}>
-                    <label htmlFor={`env-${field.key}`}>{field.label}</label>
-                    <input
-                      id={`env-${field.key}`}
-                      value={env[field.key] ?? ''}
-                      onChange={(e) => setEnv((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                    />
-                  </div>
-                ),
-              )}
+              {template.envSchema
+                .filter((field) => !field.hidden)
+                .map((field) => (
+                  <EnvVarField
+                    key={field.key}
+                    field={field}
+                    value={env[field.key] ?? ''}
+                    onChange={(value) => setEnv((prev) => ({ ...prev, [field.key]: value }))}
+                  />
+                ))}
             </div>
           </details>
         )}

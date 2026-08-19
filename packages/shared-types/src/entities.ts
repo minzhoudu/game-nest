@@ -28,16 +28,38 @@ export interface PortMapping {
   label: string;
 }
 
-/** Describes one configurable env var a template exposes to the user. */
+export interface EnvVarOption {
+  value: string;
+  label: string;
+}
+
+/**
+ * Describes one configurable env var a template exposes to the user.
+ * `select`/`range` exist specifically so "advanced options" can offer real
+ * constraints instead of free text a user has to guess at correctly (a
+ * Minecraft version that doesn't exist, a memory string Docker rejects,
+ * a difficulty that's really an arbitrary string) — see
+ * apps/web/src/pages/CreateServerPage.tsx for how each type renders.
+ */
 export interface EnvVarSchema {
   key: string;
   label: string;
-  type: 'string' | 'number' | 'boolean';
+  type: 'string' | 'number' | 'boolean' | 'select' | 'range';
   default?: string | number | boolean;
   required?: boolean;
   /** Mask in the UI and never log the value (e.g. RCON password). */
   secret?: boolean;
   description?: string;
+  /** type: 'select' — the choices to present. */
+  options?: EnvVarOption[];
+  /** type: 'range' — slider bounds; `default` is the plain numeric position (e.g. 2, not "2G"). */
+  min?: number;
+  max?: number;
+  step?: number;
+  /** type: 'range' — suffix appended to the slider's number to form the env value, e.g. "G" turns 3 into "3G". */
+  unit?: string;
+  /** Included in the built env but not shown in the form — internal/technical settings the user shouldn't need to touch. */
+  hidden?: boolean;
 }
 
 /** A supported game, defined as a Docker image + its configuration surface. */

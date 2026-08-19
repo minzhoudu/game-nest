@@ -89,6 +89,18 @@ export class ServersController {
         serverId: server.id,
       });
     } catch (err) {
+      // createContainer may have already succeeded even though the overall
+      // sequence failed (e.g. startContainer hit a port conflict) — that
+      // would otherwise leave an orphaned, never-started container sitting
+      // on the node forever. Best-effort cleanup; swallow a failure here,
+      // since there's nothing more we can do and it would only mask the
+      // original error.
+      await this.commands
+        .send(dto.nodeId, {
+          type: 'command.deleteContainer',
+          serverId: server.id,
+        })
+        .catch(() => undefined);
       await this.servers.remove(server.id, user.id);
       throw new BadRequestException(
         err instanceof Error ? err.message : String(err),
