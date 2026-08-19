@@ -17,6 +17,7 @@ import { NodeCommandService } from '../nodes/node-command.service';
 import { NodeRegistryService } from '../nodes/node-registry.service';
 import { TemplatesService } from '../templates/templates.service';
 import type { CreateServerDto } from './dto/create-server.dto';
+import { PortAllocatorService } from './port-allocator.service';
 import { resolveEnv } from './resolve-env';
 import { ServersService } from './servers.service';
 
@@ -30,6 +31,7 @@ export class ServersController {
     private readonly templates: TemplatesService,
     private readonly commands: NodeCommandService,
     private readonly nodeRegistry: NodeRegistryService,
+    private readonly portAllocator: PortAllocatorService,
   ) {}
 
   @Get()
@@ -68,12 +70,17 @@ export class ServersController {
     }
 
     const env = resolveEnv(template.envSchema, dto.env ?? {});
+    // Allocate host ports before creating the DB row — if the node's range
+    // is exhausted this throws and nothing gets created at all, rather than
+    // leaving a "creating" row with nowhere to actually bind.
+    const ports = await this.portAllocator.allocate(dto.nodeId, template.ports);
     const server = await this.servers.create({
       ownerId: user.id,
       nodeId: dto.nodeId,
       templateId: template.id,
       name: dto.name,
       config: { env },
+      ports,
     });
 
     try {
@@ -81,7 +88,7 @@ export class ServersController {
         type: 'command.createContainer',
         serverId: server.id,
         dockerImage: template.dockerImage,
-        ports: template.ports,
+        ports: server.ports,
         config: server.config,
       });
       await this.commands.send(dto.nodeId, {

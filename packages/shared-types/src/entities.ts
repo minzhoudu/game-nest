@@ -28,6 +28,18 @@ export interface PortMapping {
   label: string;
 }
 
+/**
+ * A `PortMapping` plus the actual host port a specific server got assigned
+ * on its node — decided once, at creation, by PortAllocatorService
+ * (apps/api/src/servers/port-allocator.service.ts) so two servers on the
+ * same node never both try to bind the template's default port. `tcp`/`udp`
+ * pairs that share one containerPort (e.g. 7 Days to Die's game port) are
+ * allocated the same hostPort — see the allocator for why.
+ */
+export interface PortBinding extends PortMapping {
+  hostPort: number;
+}
+
 export interface EnvVarOption {
   value: string;
   label: string;
@@ -96,5 +108,7 @@ export interface GameServer {
   name: string;
   status: ServerStatus;
   config: GameServerConfig;
+  /** Host ports actually assigned to this server on its node — see PortBinding. */
+  ports: PortBinding[];
   createdAt: string;
 }

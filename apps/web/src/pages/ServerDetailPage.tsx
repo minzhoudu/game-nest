@@ -6,7 +6,6 @@ import { api } from '../api/client';
 import { CopyableAddress } from '../components/CopyableAddress';
 import { StatusBadge } from '../components/StatusBadge';
 import { useServers } from '../hooks/useServers';
-import { useTemplates } from '../hooks/useTemplates';
 import { connectAddress } from '../lib/connect-address';
 
 const BUSY_STATUSES = new Set<ServerStatus>([
@@ -20,7 +19,6 @@ export function ServerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: servers, isLoading } = useServers();
-  const { data: templates } = useTemplates();
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -56,7 +54,7 @@ export function ServerDetailPage() {
 
   const busy =
     BUSY_STATUSES.has(server.status) || startMutation.isPending || stopMutation.isPending || deleteMutation.isPending;
-  const address = connectAddress(server, templates);
+  const address = connectAddress(server);
 
   return (
     <section>

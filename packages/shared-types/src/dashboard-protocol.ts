@@ -9,7 +9,7 @@
 // every REST response, so the dashboard never has to reconcile two
 // different ideas of what a "node" or "server" looks like.
 
-import type { GameServerConfig, Id, ServerStatus } from './entities.js';
+import type { GameServerConfig, Id, PortBinding, ServerStatus } from './entities.js';
 import type { HostInfo } from './agent-protocol.js';
 
 export interface NodeSummary {
@@ -26,6 +26,8 @@ export interface ServerSummary {
   name: string;
   status: ServerStatus;
   config: GameServerConfig;
+  /** Host ports actually assigned to this server on its node — see PortBinding. */
+  ports: PortBinding[];
   createdAt: string;
 }
 

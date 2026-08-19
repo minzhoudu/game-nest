@@ -121,9 +121,10 @@ rather than resetting to the list. The list page (`/`) shows just name,
 status, and a copyable connect address, no action buttons; actions
 (start/stop/delete) live on the detail page (`/servers/:id`); logs are their
 own page (`/servers/:id/logs`). The connect address shown is a best-effort
-`host:port` derived from `VITE_API_URL`'s hostname + the template's game
-port — only actually correct when the node is the same machine as `api`
-(true for local dev, not once nodes can be remote; see
+`host:port`: the port is now the server's actual assigned `hostPort` (see
+"Real port allocation" below), but the host part is still derived from
+`VITE_API_URL`'s hostname — only actually correct when the node is the same
+machine as `api` (true for local dev, not once nodes can be remote; see
 `apps/web/src/lib/connect-address.ts`).
 
 **The dashboard works end to end, live — no polling.** Create a server (pick
@@ -175,11 +176,9 @@ later), and difficulty is a dropdown instead of arbitrary text. A `hidden`
 flag also exists for env vars a template needs but shouldn't ask the user
 about (7 Days to Die's `START_MODE`).
 
-Not done yet: real port allocation (currently host port == container port,
-so only one server per port per node at a time — this is also why the
-Minecraft port-conflict bug below was easy to hit), Google/OAuth login, and
-`GameNode` itself isn't persisted (nodes are deliberately still
-connection-scoped/in-memory — see Design notes).
+Not done yet: Google/OAuth login, and `GameNode` itself isn't persisted
+(nodes are deliberately still connection-scoped/in-memory — see Design
+notes).
 
 **Bug found and fixed while testing this**: if `command.createContainer`
 succeeded but the subsequent `command.startContainer` failed (e.g. a port
@@ -189,6 +188,24 @@ now also best-effort sends `command.deleteContainer` before giving up.
 Reproduced the failure twice (real port conflict) to confirm: broken before
 the fix (orphaned container left behind), clean after (nothing left,
 `docker ps -a` empty).
+
+**Real port allocation.** Host port no longer always equals the template's
+container port — `PortAllocatorService`
+([apps/api/src/servers/port-allocator.service.ts](apps/api/src/servers/port-allocator.service.ts))
+hands each new server the first free port in a range
+(`PORT_RANGE_START`–`PORT_RANGE_END`, default 20000–20999) on its node,
+checked against every other server already there. This is what actually
+fixes the port-conflict scenario above rather than just cleaning up after
+it: two (or more) servers of the same game can now run on the same node at
+once. A `PortMapping` (what a template needs) plus the assigned `hostPort`
+is a `PortBinding` (`packages/shared-types/src/entities.ts`) —
+`GameServer.ports` stores the binding(s) actually assigned, and the
+dashboard's connect address reads that instead of assuming the template
+default. Verified live: created two Minecraft servers and a 7 Days to Die
+server on one real node simultaneously — `docker ps -a` showed all three
+running on distinct host ports (20000/20001/20002), and the dashboard (both
+list and detail pages, in a real browser) showed the correct
+`localhost:PORT` for each.
 
 **Running the dashboard locally:**
 

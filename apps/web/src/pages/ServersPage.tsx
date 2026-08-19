@@ -2,12 +2,10 @@ import { Link } from 'react-router-dom';
 import { CopyableAddress } from '../components/CopyableAddress';
 import { StatusBadge } from '../components/StatusBadge';
 import { useServers } from '../hooks/useServers';
-import { useTemplates } from '../hooks/useTemplates';
 import { connectAddress } from '../lib/connect-address';
 
 export function ServersPage() {
   const { data: servers, isLoading } = useServers();
-  const { data: templates } = useTemplates();
 
   return (
     <section>
@@ -25,7 +23,7 @@ export function ServersPage() {
       ) : (
         <div className="server-grid">
           {servers.map((server) => {
-            const address = connectAddress(server, templates);
+            const address = connectAddress(server);
             return (
               <Link to={`/servers/${server.id}`} className="card card-link" key={server.id}>
                 <div className="card-header">

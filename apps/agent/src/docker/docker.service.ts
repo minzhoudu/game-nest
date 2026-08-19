@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import Docker from 'dockerode';
 import { PassThrough } from 'node:stream';
-import { GameServerConfig, PortMapping } from '@gamenest/shared-types';
+import { GameServerConfig, PortBinding } from '@gamenest/shared-types';
 
 /**
  * Executes the Docker side of ServerToAgentMessage commands. One container
@@ -18,7 +18,7 @@ export class DockerService {
   async createContainer(
     serverId: string,
     dockerImage: string,
-    ports: PortMapping[],
+    ports: PortBinding[],
     config: GameServerConfig,
   ): Promise<void> {
     await this.ensureImage(dockerImage);
@@ -28,10 +28,11 @@ export class DockerService {
     for (const port of ports) {
       const key = `${port.containerPort}/${port.protocol}`;
       exposedPorts[key] = {};
-      // MVP: host port == container port, so only one server per port per
-      // node at a time. Fine for "you + friends" on one node; will need real
-      // port allocation once multiple servers of the same game share a node.
-      portBindings[key] = [{ HostPort: `${port.containerPort}` }];
+      // hostPort is decided up front by PortAllocatorService (api) so two
+      // servers on this node never fight over the same host port — this
+      // used to just be `port.containerPort`, which is exactly what caused
+      // the orphaned-container bug (see README/PLANNER.md).
+      portBindings[key] = [{ HostPort: `${port.hostPort}` }];
     }
 
     const env = Object.entries(config.env).map(

@@ -4,6 +4,7 @@ import { ServerStatus } from '@gamenest/shared-types';
 import type {
   GameServerConfig,
   Id,
+  PortBinding,
   ServerSummary,
 } from '@gamenest/shared-types';
 import type {
@@ -49,6 +50,7 @@ export class ServersService {
     templateId: Id;
     name: string;
     config: GameServerConfig;
+    ports: PortBinding[];
   }): Promise<ServerSummary> {
     const row = await this.prisma.gameServer.create({
       data: {
@@ -58,6 +60,7 @@ export class ServersService {
         name: input.name,
         status: ServerStatus.CREATING,
         config: input.config as unknown as Prisma.InputJsonValue,
+        ports: input.ports as unknown as Prisma.InputJsonValue,
       },
       include: { template: true },
     });
@@ -142,6 +145,7 @@ function fromRow(row: RowWithTemplate): ServerSummary {
     name: row.name,
     status: row.status as ServerStatus,
     config: row.config as unknown as GameServerConfig,
+    ports: row.ports as unknown as PortBinding[],
     createdAt: row.createdAt.toISOString(),
   };
 }

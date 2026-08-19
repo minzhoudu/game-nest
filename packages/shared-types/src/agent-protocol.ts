@@ -7,7 +7,7 @@
 // one of the types below, so both ends can `switch` on `type` with full
 // type-safety.
 
-import { GameServerConfig, Id, PortMapping, ServerStatus } from './entities.js';
+import { GameServerConfig, Id, PortBinding, ServerStatus } from './entities.js';
 
 // ---- Agent -> Control Plane -------------------------------------------
 
@@ -37,7 +37,8 @@ export type ServerToAgentMessage =
       requestId: Id;
       serverId: Id;
       dockerImage: string;
-      ports: PortMapping[];
+      /** Already-allocated host ports for this server — see PortBinding. */
+      ports: PortBinding[];
       config: GameServerConfig;
     }
   | { type: 'command.startContainer'; requestId: Id; serverId: Id }

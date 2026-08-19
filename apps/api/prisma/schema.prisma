@@ -95,6 +95,8 @@ model GameServer {
   status     ServerStatus @default(creating)
   /// GameServerConfig — { env: Record<string, string> }
   config     Json
+  /// PortBinding[] — host ports assigned by PortAllocatorService at creation
+  ports      Json         @default("[]")
   createdAt  DateTime     @default(now())
 
   @@map("game_servers")
