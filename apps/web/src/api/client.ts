@@ -52,6 +52,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   register: (input: Credentials) => request<AuthResult>('/auth/register', { method: 'POST', body: JSON.stringify(input) }),
   login: (input: Credentials) => request<AuthResult>('/auth/login', { method: 'POST', body: JSON.stringify(input) }),
+  loginWithGoogle: (idToken: string) =>
+    request<AuthResult>('/auth/google', { method: 'POST', body: JSON.stringify({ idToken }) }),
   listNodes: () => request<NodeSummary[]>('/nodes'),
   listTemplates: () => request<GameTemplate[]>('/templates'),
   listServers: () => request<ServerSummary[]>('/servers'),

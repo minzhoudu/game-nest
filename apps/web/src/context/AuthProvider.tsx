@@ -41,10 +41,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ user: result.user, token: result.accessToken });
   };
 
+  const loginWithGoogle: AuthContextValue['loginWithGoogle'] = async (idToken) => {
+    const result = await api.loginWithGoogle(idToken);
+    setStoredAuth(result.accessToken, result.user);
+    setState({ user: result.user, token: result.accessToken });
+  };
+
   const logout = () => {
     clearAuth();
     setState({ user: null, token: null });
   };
 
-  return <AuthContext.Provider value={{ ...state, login, register, logout }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ ...state, login, register, loginWithGoogle, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }

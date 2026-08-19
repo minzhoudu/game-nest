@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { GoogleSignInButton } from '../components/GoogleSignInButton';
 import { useAuth } from '../hooks/useAuth';
 
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,6 +20,13 @@ export function LoginPage() {
       .then(() => navigate('/'))
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setSubmitting(false));
+  };
+
+  const onGoogleCredential = (idToken: string) => {
+    setError(null);
+    loginWithGoogle(idToken)
+      .then(() => navigate('/'))
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
   };
 
   return (
@@ -53,6 +61,8 @@ export function LoginPage() {
         <p className="muted">
           No account? <Link to="/signup">Sign up</Link>
         </p>
+        <div className="auth-divider">or</div>
+        <GoogleSignInButton onCredential={onGoogleCredential} />
       </form>
     </div>
   );

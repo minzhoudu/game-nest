@@ -58,6 +58,7 @@ for running the agent against real containers later).
 pnpm install
 cp apps/api/.env.example apps/api/.env
 cp apps/agent/.env.example apps/agent/.env
+cp apps/web/.env.example apps/web/.env
 # edit apps/api/.env: set JWT_SECRET to any long random string
 pnpm db:up                # starts Postgres via docker-compose
 pnpm --filter @gamenest/api prisma:migrate   # applies the schema (first run only)
@@ -65,8 +66,17 @@ pnpm dev
 ```
 
 First run: open the dashboard, sign up an account (email/password — no email
-verification, this isn't gated on anything). Everything after that is scoped
-to whoever's logged in.
+verification, this isn't gated on anything) or use the Google button.
+Everything after that is scoped to whoever's logged in.
+
+Google sign-in is optional — leave `GOOGLE_CLIENT_ID` (api) and
+`VITE_GOOGLE_CLIENT_ID` (web) unset and the button just doesn't render;
+email/password still works standalone. To enable it: a Google Cloud
+Console project → Credentials → Create OAuth client → Web application →
+Authorized JavaScript origins = your dashboard's origin (e.g.
+`http://localhost:5173`), Authorized redirect URIs left empty (this app
+uses the JS callback flow, not a server-side redirect) → the resulting
+client id goes in both env vars above (no client secret needed).
 
 `pnpm dev` runs `web`, `api`, and `agent` together via Turborepo. Individual apps:
 
@@ -101,9 +111,39 @@ request requires a bearer token (`JwtAuthGuard`); `/servers` is additionally
 scoped so you only ever see your own — verified by holding two different
 users' tokens simultaneously and confirming each `GET /servers` returns only
 that user's data. Nodes stay shared infrastructure, not owned by anyone —
-see Design notes below for why. Google/OAuth login is planned but not
-started; the schema (`User.passwordHash` nullable) is shaped so adding it
-later won't need a breaking migration.
+see Design notes below for why.
+
+**Google sign-in is in, alongside email/password — not a replacement.**
+Uses Google Identity Services' JS callback flow (a real "Sign in with
+Google" button, Google's own branding, no page redirect) rather than a
+server-side authorization-code exchange — the button hands the frontend an
+ID token directly, which `POST /auth/google` verifies server-side
+(`google-auth-library`, checking the token was actually issued by Google
+*for this app's client id* — never trust a token just because the browser
+sent it) before issuing a normal GameNest JWT, same as password login.
+`User.googleId` (new, unique, nullable) tracks it. Account linking is by
+verified email: signing in with Google using an email that already has a
+password account links `googleId` onto that existing row rather than
+creating a second account; a genuinely new email creates a Google-only
+account (`passwordHash` stays null, exactly what that nullable column was
+shaped for). The reverse case is handled too — trying to *register* a
+password account on an email that's Google-only gets a distinct, clear
+error ("already has an account via Google sign-in") instead of a confusing
+generic one; logging in with a password against a Google-only account
+still gets the same generic "Invalid email or password" as any other
+failure, deliberately, to preserve the existing no-account-enumeration
+property on the login endpoint (register has always revealed duplicate
+emails either way, so being specific there isn't a new leak). Verified live
+against the real Google verification library, not just mocked: a garbage
+ID token gets a real 401 from `google-auth-library`'s own signature check;
+inserted a real Google-linked row and confirmed both the signup-collision
+message and the login endpoint's generic error against it through the
+actual running API; confirmed the button itself renders (Google's real
+branded UI, not a placeholder) on both `/login` and `/signup` in a live
+browser. 8 new backend unit tests. The one thing not verifiable without a
+real Google account (which nothing here will ever ask a user to hand over)
+is clicking the button end-to-end through Google's actual consent screen —
+that part needs a human.
 
 The dashboard's live-push channel (`/dashboard`) is authenticated too: a
 socket without a valid token gets disconnected on connect, and
@@ -189,9 +229,8 @@ later), and difficulty is a dropdown instead of arbitrary text. A `hidden`
 flag also exists for env vars a template needs but shouldn't ask the user
 about (7 Days to Die's `START_MODE`).
 
-Not done yet: Google/OAuth login, and `GameNode` itself isn't persisted
-(nodes are deliberately still connection-scoped/in-memory — see Design
-notes).
+Not done yet: `GameNode` itself isn't persisted (nodes are deliberately
+still connection-scoped/in-memory — see Design notes).
 
 **Bug found and fixed while testing this**: if `command.createContainer`
 succeeded but the subsequent `command.startContainer` failed (e.g. a port

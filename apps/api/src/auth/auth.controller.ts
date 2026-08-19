@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import type { CredentialsDto } from './dto/credentials.dto';
+import type { GoogleCredentialDto } from './dto/google-credential.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -16,6 +17,14 @@ export class AuthController {
   login(@Body() body: CredentialsDto) {
     this.requireCredentials(body);
     return this.auth.login(body.email, body.password);
+  }
+
+  @Post('google')
+  loginWithGoogle(@Body() body: GoogleCredentialDto) {
+    if (!body?.idToken) {
+      throw new BadRequestException('idToken is required');
+    }
+    return this.auth.loginWithGoogle(body.idToken);
   }
 
   private requireCredentials(body: CredentialsDto): void {
