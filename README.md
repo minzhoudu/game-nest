@@ -176,9 +176,9 @@ reachable the whole time — see the port allocation section below).
 Researched and switched to `didstopia/7dtd-server` instead, which exposes
 3 ports per server rather than 1 (`26900` tcp+udp for the game port, plus
 UDP `26901`/`26902`) — verified against its own `docker-compose.yml` before
-switching, same as the original research discipline. Not yet re-verified
-against a real successful boot past the point the old image hung; that's
-the next thing to check.
+switching, same as the original research discipline. **Confirmed fixed**:
+tested end to end with a real server, connected to it successfully once it
+finished booting. 7 Days to Die is now a genuinely working second template.
 
 `EnvVarSchema` (`packages/shared-types/src/entities.ts`) grew `select` and
 `range` field types so "Advanced options" can offer real constraints
