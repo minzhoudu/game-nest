@@ -73,49 +73,59 @@ const TEMPLATE_DEFINITIONS: Omit<GameTemplate, 'id'>[] = [
   {
     slug: 'seven-days-to-die',
     name: '7 Days to Die',
-    // vinanrra/Docker-7DaysToDie (LinuxGSM-based) — actively maintained,
-    // verified against its docs before adding this. Unlike itzg's Minecraft
-    // image, this one configures gameplay settings (server name, password,
-    // difficulty, max players) via serverconfig.xml inside the container,
-    // not env vars — so there's no equivalent of Minecraft's DIFFICULTY
-    // here. Exposing those would mean writing a config file into a volume
-    // at container-create time, which nothing in this app does yet
-    // (a real future feature, not in scope now — see PLANNER.md).
-    dockerImage: 'vinanrra/7dtd-server:latest',
+    // Switched from vinanrra/7dtd-server to Didstopia/7dtd-server (session
+    // 7) — the vinanrra image reliably hung on every server tested (fresh
+    // worlds included, a restart didn't clear it) at the same startup step
+    // ("Dymesh door replacement: imposterBlock"), confirmed via docker logs
+    // to be the game process itself never finishing, not a GameNest
+    // networking/port issue (the actual TCP+UDP bindings were verified
+    // reachable throughout). Re-verified against Didstopia's own
+    // docker-compose.yml before switching, same discipline as adding the
+    // first image. Still configures gameplay settings (server name,
+    // password, difficulty, max players) via serverconfig.xml inside the
+    // container, not env vars — same limitation as before, unrelated to
+    // which image is used. No persistent volume for save data across
+    // restarts yet either (matches Minecraft's template — a real future
+    // feature, not in scope now, see PLANNER.md).
+    dockerImage: 'didstopia/7dtd-server:latest',
     ports: [
       { containerPort: 26900, protocol: 'tcp', label: 'Game port (TCP)' },
       { containerPort: 26900, protocol: 'udp', label: 'Game port (UDP)' },
+      // Didstopia's image opens two more UDP ports beyond the main game
+      // port (per its docker-compose.yml) — unlike Minecraft/vinanrra's
+      // 7DTD, this template needs 3 total host ports per server, not 1.
+      { containerPort: 26901, protocol: 'udp', label: 'Query port' },
+      { containerPort: 26902, protocol: 'udp', label: 'Auxiliary port' },
     ],
     envSchema: [
-      // 3 = "update server and start" — the one mode that works for both a
-      // fresh container (installs first) and a restart, matching how this
-      // app always does create+start together. Not a real user choice, so
-      // it's hidden from the form and just always sent.
+      // 0 = "update server and start" — works for both a fresh container
+      // (installs first) and a restart, matching how this app always does
+      // create+start together. Not a real user choice, so it's hidden.
       {
-        key: 'START_MODE',
+        key: 'SEVEN_DAYS_TO_DIE_START_MODE',
         label: 'Start mode',
         type: 'string',
-        default: '3',
+        default: '0',
+        hidden: true,
+      },
+      // Set in Didstopia's own docker-compose.yml example — keeping it on
+      // by default so VERSION/branch switches actually take effect on the
+      // next start instead of silently reusing whatever was last installed.
+      {
+        key: 'SEVEN_DAYS_TO_DIE_UPDATE_CHECKING',
+        label: 'Check for updates on start',
+        type: 'string',
+        default: '1',
         hidden: true,
       },
       {
-        key: 'VERSION',
+        key: 'SEVEN_DAYS_TO_DIE_BRANCH',
         label: 'Game branch',
         type: 'select',
-        default: 'stable',
+        default: 'public',
         options: [
-          { value: 'stable', label: 'Stable' },
+          { value: 'public', label: 'Public (stable)' },
           { value: 'latest_experimental', label: 'Latest experimental' },
-        ],
-      },
-      {
-        key: 'MONITOR',
-        label: 'Auto-restart if the server crashes',
-        type: 'select',
-        default: 'NO',
-        options: [
-          { value: 'YES', label: 'Yes' },
-          { value: 'NO', label: 'No' },
         ],
       },
     ],

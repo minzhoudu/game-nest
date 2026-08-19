@@ -43,6 +43,7 @@ export type ServerToAgentMessage =
     }
   | { type: 'command.startContainer'; requestId: Id; serverId: Id }
   | { type: 'command.stopContainer'; requestId: Id; serverId: Id }
+  | { type: 'command.restartContainer'; requestId: Id; serverId: Id }
   | { type: 'command.deleteContainer'; requestId: Id; serverId: Id }
   | { type: 'command.streamLogs'; requestId: Id; serverId: Id; follow: boolean };
 

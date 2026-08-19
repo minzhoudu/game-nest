@@ -68,6 +68,18 @@ export class DockerService {
     await this.getContainer(serverId).stop();
   }
 
+  /**
+   * One Docker call (stop, then start again) instead of the agent doing
+   * stopContainer()+startContainer() itself — dockerode's restart() is the
+   * same operation the Docker CLI's `docker restart` uses, and avoids two
+   * separate round trips through the command queue for what's really one
+   * user action ("get this server running again").
+   */
+  async restartContainer(serverId: string): Promise<void> {
+    this.logger.log(`Restarting container for server ${serverId}`);
+    await this.getContainer(serverId).restart();
+  }
+
   async deleteContainer(serverId: string): Promise<void> {
     this.logger.log(`Deleting container for server ${serverId}`);
     await this.getContainer(serverId).remove({ force: true });

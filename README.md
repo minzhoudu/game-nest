@@ -157,15 +157,28 @@ per-node issued tokens if/when nodes need finer-grained ownership.
 hardcoded in `TemplatesService` but upserted into Postgres on boot so
 `GameServer.templateId` is a real FK — see
 [apps/api/src/templates](apps/api/src/templates). 7 Days to Die
-(`vinanrra/7dtd-server`) has a much sparser "Advanced options" than
-Minecraft — its dedicated server configures gameplay settings (name,
-password, difficulty, max players) via an XML file inside the container,
-not env vars, so none of that is exposed here yet (would need this app to
-write a config file into a volume at container-create time — a real future
-feature, not built). Verified live: created a real server through the API,
-confirmed the container picked up `VERSION=stable` from its own logs, and
-watched it correctly proceed into the SteamCMD install/download step before
-stopping the test (didn't wait through the full multi-GB download).
+(`didstopia/7dtd-server` — switched from `vinanrra/7dtd-server` in session
+7, see below) has a much sparser "Advanced options" than Minecraft — its
+dedicated server configures gameplay settings (name, password, difficulty,
+max players) via an XML file inside the container, not env vars, so none of
+that is exposed here yet (would need this app to write a config file into a
+volume at container-create time — a real future feature, not built).
+
+**7 Days to Die's Docker image was switched mid-session after real-world
+testing surfaced a startup hang.** The original `vinanrra/7dtd-server`
+image reliably hung at the same step (`Dymesh door replacement:
+imposterBlock`) on every server tested — confirmed via `docker logs`
+timestamps (no output for 30+ minutes while the process kept burning CPU)
+and reproduced across a `docker restart` and a completely fresh server, so
+it wasn't a corrupted world or a one-off fluke. GameNest's own networking
+was verified innocent throughout (the TCP+UDP port bindings stayed
+reachable the whole time — see the port allocation section below).
+Researched and switched to `didstopia/7dtd-server` instead, which exposes
+3 ports per server rather than 1 (`26900` tcp+udp for the game port, plus
+UDP `26901`/`26902`) — verified against its own `docker-compose.yml` before
+switching, same as the original research discipline. Not yet re-verified
+against a real successful boot past the point the old image hung; that's
+the next thing to check.
 
 `EnvVarSchema` (`packages/shared-types/src/entities.ts`) grew `select` and
 `range` field types so "Advanced options" can offer real constraints

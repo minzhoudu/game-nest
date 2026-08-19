@@ -11,6 +11,7 @@ describe('AgentConnectionService', () => {
     createContainer: jest.Mock;
     startContainer: jest.Mock;
     stopContainer: jest.Mock;
+    restartContainer: jest.Mock;
     deleteContainer: jest.Mock;
     streamLogs: jest.Mock;
   };
@@ -23,6 +24,7 @@ describe('AgentConnectionService', () => {
       createContainer: jest.fn().mockResolvedValue(undefined),
       startContainer: jest.fn().mockResolvedValue(undefined),
       stopContainer: jest.fn().mockResolvedValue(undefined),
+      restartContainer: jest.fn().mockResolvedValue(undefined),
       deleteContainer: jest.fn().mockResolvedValue(undefined),
       streamLogs: jest.fn().mockResolvedValue(() => {}),
     };
@@ -113,6 +115,31 @@ describe('AgentConnectionService', () => {
         status: ServerStatus.STOPPED,
       },
       { type: 'command.ack', requestId: 'r3' },
+    ]);
+  });
+
+  it('restarting a container reports starting then running, in order (one Docker call, not stop+start)', async () => {
+    await handleMessage({
+      type: 'command.restartContainer',
+      requestId: 'r6',
+      serverId: 's1',
+    });
+
+    expect(docker.restartContainer).toHaveBeenCalledWith('s1');
+    expect(docker.stopContainer).not.toHaveBeenCalled();
+    expect(docker.startContainer).not.toHaveBeenCalled();
+    expect(sent).toEqual([
+      {
+        type: 'container.status',
+        serverId: 's1',
+        status: ServerStatus.STARTING,
+      },
+      {
+        type: 'container.status',
+        serverId: 's1',
+        status: ServerStatus.RUNNING,
+      },
+      { type: 'command.ack', requestId: 'r6' },
     ]);
   });
 

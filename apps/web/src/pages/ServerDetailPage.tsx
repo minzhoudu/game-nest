@@ -34,6 +34,7 @@ export function ServerDetailPage() {
 
   const startMutation = useMutation({ mutationFn: () => runAction(() => api.startServer(id!)) });
   const stopMutation = useMutation({ mutationFn: () => runAction(() => api.stopServer(id!)) });
+  const restartMutation = useMutation({ mutationFn: () => runAction(() => api.restartServer(id!)) });
   const deleteMutation = useMutation({
     mutationFn: () => runAction(() => api.deleteServer(id!)),
     onSuccess: () => navigate('/'),
@@ -53,7 +54,11 @@ export function ServerDetailPage() {
   }
 
   const busy =
-    BUSY_STATUSES.has(server.status) || startMutation.isPending || stopMutation.isPending || deleteMutation.isPending;
+    BUSY_STATUSES.has(server.status) ||
+    startMutation.isPending ||
+    stopMutation.isPending ||
+    restartMutation.isPending ||
+    deleteMutation.isPending;
   const address = connectAddress(server);
 
   return (
@@ -80,9 +85,17 @@ export function ServerDetailPage() {
 
       <div className="card-actions">
         {server.status === ServerStatus.RUNNING ? (
-          <button type="button" disabled={busy} onClick={() => stopMutation.mutate()}>
-            Stop
-          </button>
+          <>
+            <button type="button" disabled={busy} onClick={() => stopMutation.mutate()}>
+              Stop
+            </button>
+            {/* One Docker restart instead of a separate stop-then-start — also the
+                fastest way to retry a server that's up but stuck mid-boot (e.g. a
+                game server hung partway through its own startup). */}
+            <button type="button" className="ghost" disabled={busy} onClick={() => restartMutation.mutate()}>
+              Restart
+            </button>
+          </>
         ) : (
           <button
             type="button"

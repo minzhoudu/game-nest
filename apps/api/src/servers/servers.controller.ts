@@ -153,6 +153,19 @@ export class ServersController {
     return this.servers.getOwnedOrThrow(id, user.id);
   }
 
+  @Post(':id/restart')
+  async restart(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const server = await this.servers.getOwnedOrThrow(id, user.id);
+    await this.commands.send(server.nodeId, {
+      type: 'command.restartContainer',
+      serverId: id,
+    });
+    return this.servers.getOwnedOrThrow(id, user.id);
+  }
+
   @Delete(':id')
   async remove(
     @Param('id') id: string,

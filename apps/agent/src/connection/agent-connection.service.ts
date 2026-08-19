@@ -154,6 +154,21 @@ export class AgentConnectionService implements OnModuleInit, OnModuleDestroy {
           });
         });
         return;
+      case 'command.restartContainer':
+        await this.runCommand(message.requestId, async () => {
+          this.send({
+            type: 'container.status',
+            serverId: message.serverId,
+            status: ServerStatus.STARTING,
+          });
+          await this.docker.restartContainer(message.serverId);
+          this.send({
+            type: 'container.status',
+            serverId: message.serverId,
+            status: ServerStatus.RUNNING,
+          });
+        });
+        return;
       case 'command.deleteContainer':
         await this.runCommand(message.requestId, async () => {
           this.send({

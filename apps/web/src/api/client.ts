@@ -60,5 +60,6 @@ export const api = {
     request<ServerSummary>('/servers', { method: 'POST', body: JSON.stringify(input) }),
   startServer: (id: string) => request<ServerSummary>(`/servers/${id}/start`, { method: 'POST' }),
   stopServer: (id: string) => request<ServerSummary>(`/servers/${id}/stop`, { method: 'POST' }),
+  restartServer: (id: string) => request<ServerSummary>(`/servers/${id}/restart`, { method: 'POST' }),
   deleteServer: (id: string) => request<{ deleted: boolean }>(`/servers/${id}`, { method: 'DELETE' }),
 };
