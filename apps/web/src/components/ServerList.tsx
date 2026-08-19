@@ -4,14 +4,14 @@ import { api } from '../api/client';
 import { CreateServerForm } from './CreateServerForm';
 import { ServerCard } from './ServerCard';
 
-const SERVERS_POLL_MS = 3000;
-
 export function ServerList() {
   const [creating, setCreating] = useState(false);
+  // One fetch as a fallback; useDashboardSocket() (mounted in App) keeps
+  // this current after that via server.created/status/removed events.
   const { data: servers, isLoading } = useQuery({
     queryKey: ['servers'],
     queryFn: api.listServers,
-    refetchInterval: SERVERS_POLL_MS,
+    staleTime: Infinity,
   });
 
   return (

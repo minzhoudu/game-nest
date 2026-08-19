@@ -2,19 +2,17 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { api } from '../api/client';
 
-const LOGS_POLL_MS = 2000;
-
 /**
- * Polls GET /servers/:id/logs while mounted. Not live-pushed over a socket
- * yet (the WS pipeline that captures these lines already exists —
- * see agent-events.ts — this just isn't wired to the dashboard yet).
- * Polling every 2s is a fine MVP substitute.
+ * Fetches the current log buffer once on mount, then relies on
+ * useDashboardSocket() (mounted in App) to append new `server.log` lines to
+ * this exact query key as they arrive — no polling, no re-fetching the
+ * whole buffer just to pick up one new line.
  */
 export function ServerLogs({ serverId }: { serverId: string }) {
   const { data: lines } = useQuery({
     queryKey: ['server-logs', serverId],
     queryFn: () => api.getServerLogs(serverId),
-    refetchInterval: LOGS_POLL_MS,
+    staleTime: Infinity,
   });
 
   const bottomRef = useRef<HTMLDivElement>(null);

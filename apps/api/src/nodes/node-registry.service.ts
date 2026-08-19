@@ -1,13 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Socket } from 'socket.io';
-import { HostInfo, Id } from '@gamenest/shared-types';
+import { HostInfo, Id, NodeSummary } from '@gamenest/shared-types';
 
-export interface ConnectedNode {
-  nodeId: Id;
+export interface ConnectedNode extends NodeSummary {
   socket: Socket;
-  hostInfo: HostInfo;
-  connectedAt: string;
-  lastSeenAt: string;
 }
 
 /**
@@ -23,15 +19,18 @@ export class NodeRegistryService {
   private readonly logger = new Logger(NodeRegistryService.name);
   private readonly nodes = new Map<Id, ConnectedNode>();
 
-  register(nodeId: Id, socket: Socket, hostInfo: HostInfo): void {
+  /** Returns the summary just recorded — callers use it to broadcast a node.connected event. */
+  register(nodeId: Id, socket: Socket, hostInfo: HostInfo): NodeSummary {
     const now = new Date().toISOString();
-    this.nodes.set(nodeId, {
+    const node: ConnectedNode = {
       nodeId,
       socket,
       hostInfo,
       connectedAt: now,
       lastSeenAt: now,
-    });
+    };
+    this.nodes.set(nodeId, node);
+    return this.toSummary(node);
   }
 
   touchHeartbeat(nodeId: Id): void {
@@ -58,12 +57,16 @@ export class NodeRegistryService {
     return this.nodes.get(nodeId)?.socket;
   }
 
-  list(): Array<Omit<ConnectedNode, 'socket'>> {
-    return [...this.nodes.values()].map((node) => ({
+  list(): NodeSummary[] {
+    return [...this.nodes.values()].map((node) => this.toSummary(node));
+  }
+
+  private toSummary(node: ConnectedNode): NodeSummary {
+    return {
       nodeId: node.nodeId,
       hostInfo: node.hostInfo,
       connectedAt: node.connectedAt,
       lastSeenAt: node.lastSeenAt,
-    }));
+    };
   }
 }

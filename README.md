@@ -7,17 +7,22 @@ own PC while developing, or on a cloud VM later — from a web dashboard.
 
 ```
 apps/
-  web/     React + Vite dashboard
-  api/     NestJS control plane (REST + WebSocket gateway, owns Postgres)
-           - /templates  available games (hardcoded for now — see TemplatesService)
-           - /servers    create/start/stop/delete a game server, view its logs
-           - /nodes      connected agents
+  web/     React + Vite dashboard. Two WS channels involved: agents talk to
+           api over /agent (below); the dashboard talks to api over
+           /dashboard (DashboardGateway) for live push — no polling.
+  api/     NestJS control plane (REST + WebSocket gateways, owns Postgres)
+           - /templates          available games (hardcoded for now)
+           - /servers            create/start/stop/delete a server, its logs
+           - /nodes              connected agents
+           - WS /agent           agents connect here (NodesGateway)
+           - WS /dashboard       browsers connect here for live push (DashboardGateway)
   agent/   NestJS node agent — runs on any host that hosts game servers.
            Dials OUT to api/ over WebSocket (works behind home-router NAT),
            executes Docker commands locally via dockerode (DockerService).
 packages/
-  shared-types/  DTOs + the agent<->control-plane WS protocol, imported by
-                 all three apps so the wire format stays type-safe end to end.
+  shared-types/  DTOs + both WS protocols (agent<->api, api<->dashboard),
+                 imported by all three apps so the wire format stays
+                 type-safe end to end.
 ```
 
 See [`packages/shared-types/src/agent-protocol.ts`](packages/shared-types/src/agent-protocol.ts)
@@ -60,21 +65,30 @@ pnpm db:down                                 # stop Postgres
 
 ## Status
 
-**The dashboard works end to end** — open `http://localhost:5173` with
-`api` + at least one `agent` running: create a server (pick a node, a game,
-a name), watch it go `creating` → `running`, view its live-ish log tail
-(polled every 2s), stop/start/delete it. Verified in a real browser against
-real Docker containers, not just unit-tested.
+**The dashboard works end to end, live — no polling.** Open
+`http://localhost:5173` with `api` + at least one `agent` running: create a
+server (pick a node, a game, a name), watch it go `creating` → `running`,
+watch its logs stream in as they happen, stop/start/delete it. Every one of
+those state changes arrives pushed over the `/dashboard` WebSocket the
+instant it happens — the dashboard fetches each list once on load and
+otherwise just reacts to events. Verified against real Docker containers in
+a real browser with the network tab open: `POST /servers` fires once,
+`GET /servers/:id/logs` fires once even across a full Minecraft boot (dozens
+of lines arriving live), no repeat requests ever.
 
-Under the hood: `POST /servers` creates a Docker container on the chosen
-node and starts it; the agent tails the container and streams
-`container.log` messages back through the WS pipeline (agent → api's event
-emitter → `ServersService`'s per-server ring buffer → `GET /servers/:id/logs`,
-polled by the dashboard). The agent ↔ control-plane WebSocket handshake:
-`agent` generates (and persists) a stable node id, dials out to `api`'s
-`/agent` namespace, registers with a shared-secret token, heartbeats every
-15s. `api` tracks connected nodes in memory (`GET /nodes`) and exposes a
-request/response layer over the socket (`NodeCommandService`) so REST calls
+Under the hood: internal events already flowed through
+`@nestjs/event-emitter` for other reasons (decoupling `NodesGateway` from
+`ServersModule`) — `DashboardGateway` just also listens to that same bus and
+re-shapes each event into the `DashboardEvent` wire format
+(`packages/shared-types/src/dashboard-protocol.ts`), broadcasting to every
+connected browser. `NodeSummary`/`ServerSummary` in `shared-types` are now
+the one shape used for the initial snapshot, every REST response, and every
+push event — no more hand-duplicated frontend types.
+
+The agent ↔ control-plane WebSocket handshake (separate channel, `/agent`):
+`agent` generates (and persists) a stable node id, dials out to `api`,
+registers with a shared-secret token, heartbeats every 15s. `api` exposes a
+request/response layer over that socket (`NodeCommandService`) so REST calls
 can `await` a command's `command.ack`. Auth is a single shared secret for
 now (`AGENT_REGISTRATION_SECRET` / `AGENT_TOKEN`) — fine for you + friends,
 will become per-node issued tokens once nodes are persisted.
@@ -89,8 +103,7 @@ next real gap to close.
 
 Not done yet: persistence (see above), a second GameTemplate, real port
 allocation (currently host port == container port, so only one server per
-port per node at a time), live-pushed logs over the socket instead of
-polling, and any auth beyond the one shared secret.
+port per node at a time), and any auth beyond the one shared secret.
 
 **Running the dashboard locally:**
 

@@ -19,7 +19,9 @@ import {
   AGENT_COMMAND_ERROR,
   AGENT_CONTAINER_LOG,
   AGENT_CONTAINER_STATUS,
-} from './agent-events';
+  NODE_CONNECTED,
+  NODE_DISCONNECTED,
+} from '../events/internal-events';
 import { NodeRegistryService } from './node-registry.service';
 
 /**
@@ -82,6 +84,7 @@ export class NodesGateway implements OnGatewayDisconnect {
     const nodeId = this.registry.unregisterBySocketId(client.id);
     if (nodeId) {
       this.logger.log(`Node ${nodeId} disconnected`);
+      this.events.emit(NODE_DISCONNECTED, { nodeId });
     }
   }
 
@@ -104,10 +107,15 @@ export class NodesGateway implements OnGatewayDisconnect {
       return;
     }
 
-    this.registry.register(message.nodeId, client, message.hostInfo);
+    const node = this.registry.register(
+      message.nodeId,
+      client,
+      message.hostInfo,
+    );
     this.logger.log(
       `Node ${message.nodeId} registered (${message.hostInfo.os}/${message.hostInfo.arch}, docker ${message.hostInfo.dockerVersion})`,
     );
+    this.events.emit(NODE_CONNECTED, node);
     this.send(client, { type: 'agent.registered', nodeId: message.nodeId });
   }
 

@@ -4,7 +4,9 @@ import {
   AGENT_COMMAND_ERROR,
   AGENT_CONTAINER_LOG,
   AGENT_CONTAINER_STATUS,
-} from './agent-events';
+  NODE_CONNECTED,
+  NODE_DISCONNECTED,
+} from '../events/internal-events';
 import { NodesGateway } from './nodes.gateway';
 import type { ConfigService } from '@nestjs/config';
 import type { EventEmitter2 } from '@nestjs/event-emitter';
@@ -39,7 +41,15 @@ describe('NodesGateway', () => {
     totalMemoryMb: 16000,
   };
 
-  it('registers a node that presents the correct token', () => {
+  it('registers a node that presents the correct token, and broadcasts node.connected', () => {
+    const summary = {
+      nodeId: 'node-1',
+      hostInfo,
+      connectedAt: '2026-01-01T00:00:00.000Z',
+      lastSeenAt: '2026-01-01T00:00:00.000Z',
+    };
+    registry.register.mockReturnValue(summary);
+
     gateway.handleMessage(client as never, {
       type: 'agent.register',
       nodeId: 'node-1',
@@ -53,6 +63,7 @@ describe('NodesGateway', () => {
       nodeId: 'node-1',
     });
     expect(client.disconnect).not.toHaveBeenCalled();
+    expect(events.emit).toHaveBeenCalledWith(NODE_CONNECTED, summary);
   });
 
   it('rejects and disconnects a node with the wrong token', () => {
@@ -135,7 +146,7 @@ describe('NodesGateway', () => {
     });
   });
 
-  it('forgets the owning node on disconnect', () => {
+  it('forgets the owning node on disconnect and broadcasts node.disconnected', () => {
     const unregisterBySocketId = jest.fn().mockReturnValue('node-1');
     (
       registry as unknown as { unregisterBySocketId: jest.Mock }
@@ -144,5 +155,19 @@ describe('NodesGateway', () => {
     gateway.handleDisconnect(client as never);
 
     expect(unregisterBySocketId).toHaveBeenCalledWith('socket-1');
+    expect(events.emit).toHaveBeenCalledWith(NODE_DISCONNECTED, {
+      nodeId: 'node-1',
+    });
+  });
+
+  it('does not broadcast node.disconnected for an unknown socket', () => {
+    const unregisterBySocketId = jest.fn().mockReturnValue(undefined);
+    (
+      registry as unknown as { unregisterBySocketId: jest.Mock }
+    ).unregisterBySocketId = unregisterBySocketId;
+
+    gateway.handleDisconnect(client as never);
+
+    expect(events.emit).not.toHaveBeenCalled();
   });
 });

@@ -8,5 +8,6 @@ import { ServersService } from './servers.service';
   imports: [NodesModule, TemplatesModule],
   controllers: [ServersController],
   providers: [ServersService],
+  exports: [ServersService],
 })
 export class ServersModule {}

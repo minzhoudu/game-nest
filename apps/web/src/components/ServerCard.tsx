@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ServerStatus } from '@gamenest/shared-types';
-import type { ManagedServer } from '../api/client';
+import type { ServerSummary } from '../api/client';
 import { api } from '../api/client';
 import { ServerLogs } from './ServerLogs';
 import { StatusBadge } from './StatusBadge';
@@ -13,7 +13,7 @@ const BUSY_STATUSES = new Set<ServerStatus>([
   ServerStatus.DELETING,
 ]);
 
-export function ServerCard({ server }: { server: ManagedServer }) {
+export function ServerCard({ server }: { server: ServerSummary }) {
   const [logsOpen, setLogsOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();

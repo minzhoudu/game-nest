@@ -1,31 +1,6 @@
-import type { GameTemplate, ServerStatus } from '@gamenest/shared-types';
+import type { GameTemplate, NodeSummary, ServerSummary } from '@gamenest/shared-types';
 
-// These two shapes mirror what api's in-memory registries return today
-// (NodeRegistryService.list() / ServersService.list()) — NOT the GameNode /
-// GameServer entities from shared-types, which describe the *persisted*
-// shape once Prisma wiring lands. Update these once that happens.
-export interface NodeSummary {
-  nodeId: string;
-  hostInfo: {
-    os: string;
-    arch: string;
-    dockerVersion: string;
-    cpuCount: number;
-    totalMemoryMb: number;
-  };
-  connectedAt: string;
-  lastSeenAt: string;
-}
-
-export interface ManagedServer {
-  id: string;
-  nodeId: string;
-  templateSlug: string;
-  name: string;
-  status: ServerStatus;
-  config: { env: Record<string, string> };
-  createdAt: string;
-}
+export type { NodeSummary, ServerSummary };
 
 export interface CreateServerInput {
   nodeId: string;
@@ -56,11 +31,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   listNodes: () => request<NodeSummary[]>('/nodes'),
   listTemplates: () => request<GameTemplate[]>('/templates'),
-  listServers: () => request<ManagedServer[]>('/servers'),
+  listServers: () => request<ServerSummary[]>('/servers'),
   getServerLogs: (id: string) => request<string[]>(`/servers/${id}/logs`),
   createServer: (input: CreateServerInput) =>
-    request<ManagedServer>('/servers', { method: 'POST', body: JSON.stringify(input) }),
-  startServer: (id: string) => request<ManagedServer>(`/servers/${id}/start`, { method: 'POST' }),
-  stopServer: (id: string) => request<ManagedServer>(`/servers/${id}/stop`, { method: 'POST' }),
+    request<ServerSummary>('/servers', { method: 'POST', body: JSON.stringify(input) }),
+  startServer: (id: string) => request<ServerSummary>(`/servers/${id}/start`, { method: 'POST' }),
+  stopServer: (id: string) => request<ServerSummary>(`/servers/${id}/stop`, { method: 'POST' }),
   deleteServer: (id: string) => request<{ deleted: boolean }>(`/servers/${id}`, { method: 'DELETE' }),
 };

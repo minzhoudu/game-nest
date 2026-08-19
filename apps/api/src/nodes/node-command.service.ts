@@ -3,11 +3,14 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { randomUUID } from 'node:crypto';
 import { PROTOCOL_EVENT } from '@gamenest/shared-types';
 import type { Id, ServerToAgentMessage } from '@gamenest/shared-types';
-import { AGENT_COMMAND_ACK, AGENT_COMMAND_ERROR } from './agent-events';
+import {
+  AGENT_COMMAND_ACK,
+  AGENT_COMMAND_ERROR,
+} from '../events/internal-events';
 import type {
   AgentCommandAckEvent,
   AgentCommandErrorEvent,
-} from './agent-events';
+} from '../events/internal-events';
 import { NodeRegistryService } from './node-registry.service';
 
 export const COMMAND_TIMEOUT_MS = 30_000;
@@ -34,8 +37,8 @@ type Command = DistributiveOmit<
  * Turns the fire-and-forget agent socket into request/response: send() sends
  * a command down a node's socket and returns a Promise that resolves on the
  * matching command.ack (or rejects on command.error / timeout). NodesGateway
- * emits those as agent-events.ts events as they arrive; the @OnEvent handlers
- * below feed them back into whichever send() is still waiting.
+ * emits those as internal-events.ts events as they arrive; the @OnEvent
+ * handlers below feed them back into whichever send() is still waiting.
  */
 @Injectable()
 export class NodeCommandService {
